@@ -8,9 +8,7 @@ __all__ = ['HermanKlukPropagator', 'WaltonManolopoulosPropagator', 'hbar']
 import torch
 from torch.distributions.multivariate_normal import MultivariateNormal
 
-import numpy as np
-import numpy.linalg as la
-import scipy.linalg as sla
+import numpy as np   # defines np.pi
 import logging
 
 # Atomic units are used throughout
@@ -26,54 +24,30 @@ logging.basicConfig(format="[%(module)-12s] %(message)s", level=logging.INFO)
 
 # # Linear Algebra
 
-def _triangular_det(T):
+def _sym_sqrtm(A):
     """
-    compute the determinant of a triangular matrix as the product
-    of the diagonal elements
+    square root of symmetric real matrix, A^{1/2}
     
     Parameters
     ----------
-    T    :   Tensor (m,n,n)
-       batch of `m` upper or lower triangular `n` x `n` matrices
-       
-    Returns
-    -------
-    det  :   Tensor (m,)
-       determinants, det[m] = det(T[m,:,:])
-    """
-    det = torch.prod(torch.diagonal(T, dim1=1, dim2=2), 1)
-    return(det)
-    
-def _complex_det(A):
-    """
-    determinants of a batch of complex matrices
-    
-    Parameters
-    ----------
-    A    :  Tensor (m,n,n)
-       batch of `m` complex n x n matrices
+    A    :  real Tensor (n,n)
+       n x n matrix
     
     Returns
     -------
-    det  :  Tensor (m,)
-       determinants, det[m] = det(A[m,:,:])
+    sqA  :  real Tensor (n,n)
+       square root of A, such that sqA.sqA = A
     """
-    # 
-    n,n = A.size()[-2:]
-    if n == 1:
-        # The determinant of a scalar is the identity
-        return A.squeeze()
+    # eigenvalue decomposition of symmetric A
+    #  A = V.diag(e).V^{T}
+    e, V = torch.symeig(A, eigenvectors=True)
+    # We compute the root of the eigenvalues and transform back
+    # from the basis of eigenvectors
+    # A^{1/2} = V.diag(sqrt(e)).V^{T}
+    sqA = torch.einsum('ij,j,kj->ik', V, torch.sqrt(e), V)
     
-    # LU decomposition of matrix A
-    LU, pivots = A.lu()
-    P, L, U = torch.lu_unpack(LU, pivots)
-    # L and U are lower and upper triangular matrices. The determinant of a triangular
-    # matrix is just the product of the diagonal elements. 
-    # det(A) = det(L) * det(U) * det(P)
-    det = _triangular_det(L) * _triangular_det(U) * torch.det(P.real)
-    #Could probably calculate det(P) [which is +-1] efficiently using Sylvester's determinant identity
-    return det
-
+    return sqA
+    
 
 # # Fourth-Order Runge-Kutta Integrator
 
@@ -292,7 +266,7 @@ def _equations_of_motion(t, y, potential):
       potential energy surface implementing energy(q), gradient(q) and hessian(q) methods
     """
     d = potential.dimensions()
-    masses = potential.masses()
+    masses = potential.masses().to(y.device)
     
     q,p, Mqq,Mqp,Mpq,Mpp, action = torch.split(y, [d,d,d**2,d**2,d**2,d**2,1])
     
@@ -360,24 +334,33 @@ def _equations_of_motion(t, y, potential):
 
 
 class HermanKlukPropagator(object):
-    def __init__(self, Gamma_i, Gamma_t):
+    def __init__(self, Gamma_i, Gamma_t, device='cpu'):
         """
         semiclassical Herman-Kluk propagator
         
         Parameters
         ----------
-        Gamma_i  :  real Tensor (dim,dim)
+        Gamma_i  :  real, symmetric Tensor (dim,dim)
           width parameter matrix of initial coherent states at t=0
-        Gamma_t  :  real Tensor (dim,dim)
+        Gamma_t  :  real, symmetric Tensor (dim,dim)
           width parameter matrix of coherent states at later times t
+        device   :  str
+          default device (usually 'gpu' or 'cuda') used for initializing all tensors. 
+          All calculations of the propagator will be run on this device.
         """
+        # default device
+        self.device = device
+        # move input tensors to device
+        Gamma_i, Gamma_t = Gamma_i.to(device), Gamma_t.to(device)
+        logger.info(f"propagation will be run on device '{self.device}'")
+
         # width parameters of coherent states
         self.Gamma_i = Gamma_i
         self.Gamma_t = Gamma_t
         # \Gamma_i^{1/2}
-        self.sqGi = torch.tensor(sla.sqrtm(Gamma_i))
+        self.sqGi = _sym_sqrtm(Gamma_i)
         # \Gamma_t^{1/2}
-        self.sqGt = torch.tensor(sla.sqrtm(Gamma_t))
+        self.sqGt = _sym_sqrtm(Gamma_t)
         # \Gamma_i^{-1/2}
         self.isqGi = torch.inverse(self.sqGi)
         # \Gamma_t^{-1/2}
@@ -412,6 +395,10 @@ class HermanKlukPropagator(object):
         # abbreviations
         n = ntraj
         d = q0.size()[0]
+        device = self.device
+        
+        # move tensors to default device
+        q0, p0, Gamma_0 = q0.to(device), p0.to(device), Gamma_0.to(device)
         
         G0 = Gamma_0
         Gi = self.Gamma_i
@@ -445,7 +432,7 @@ class HermanKlukPropagator(object):
         logger.info(f"q0= {q0} \t <q>= {torch.mean(qi)}  ")
         logger.info(f"p0= {p0} \t <p>= {torch.mean(pi)}  ")
         logger.info("")
-        
+
         # normalization constant, the wavefunction obtained as a superposition of frozen
         # Gaussians has to be divided by the normalization constant.
         # The wavefunction is assembled by Monte Carlo integration over the initial values.
@@ -458,7 +445,7 @@ class HermanKlukPropagator(object):
         probi = norm_fac * torch.exp(-0.5 * torch.einsum('in,ij,jn->n', zi-mu, torch.inverse(cov), zi-mu))
      
         # Initialize solution vector y (contains positions, momenta, monodromy matrix and classical action)
-        yi = torch.zeros((2*d+4*d**2+1, n))
+        yi = torch.zeros((2*d+4*d**2+1, n)).to(device)
         z,Mqq,Mqp,Mpq,Mpp,action = torch.split(yi, [2*d,d**2,d**2,d**2,d**2,1])
         
         Mqq = Mqq.view(d,d,-1)
@@ -470,14 +457,14 @@ class HermanKlukPropagator(object):
         #
         # dr_a(i)/dr_b(i) = delta_ab
         #
-        Mqq[...] = torch.eye(d).unsqueeze(2).expand(-1,-1,n)
+        Mqq[...] = torch.eye(d).to(device).unsqueeze(2).expand(-1,-1,n)
         #
         # dr_a(i)/dp_b(i) = 0
         # dp_a(i)/dr_b(i) = 0
         #
         # dp_a(i)/dp_b(i) = delta_ab
         #
-        Mpp[...] = torch.eye(d).unsqueeze(2).expand(-1,-1,n)
+        Mpp[...] = torch.eye(d).to(device).unsqueeze(2).expand(-1,-1,n)
 
         # set initial phase space points (q0,p0)
         z[...] = zi
@@ -501,7 +488,7 @@ class HermanKlukPropagator(object):
         # initialize solution vector y
         self.y = yi
         # semiclassical prefactor
-        self.c = torch.ones(n, dtype=torch.complex128)
+        self.c = torch.ones(n, dtype=torch.complex128).to(device)
         
         # Initialize variables for t=0
         self._prefactor()
@@ -588,14 +575,14 @@ class HermanKlukPropagator(object):
         
         csw = CoherentStatesWavefunction(self.Gamma_t)
             
-        phi = torch.zeros(nx, dtype=torch.complex128)
+        phi = torch.zeros(nx, dtype=torch.complex128).to(self.device)
         nchunk = nx // 100 + 1
         # Split the spatial grid into chunks and compute the wavefunction on each chunk.
         for x_,phi_ in zip(torch.chunk(x,nchunk,dim=1), 
                            torch.chunk(phi,nchunk,dim=0)):
             phi_[:] = csw(q,p,v,x_)
             
-        return phi.detach().numpy()
+        return phi.detach().cpu().numpy()
     
     def norm(self):
         """
@@ -627,7 +614,7 @@ class HermanKlukPropagator(object):
         # by accumulating the terms v^T.O.v from all combinations of blocks.
         q,p = self.current_positions_and_momenta()
         cso = CoherentStatesOverlap(self.Gamma_t, self.Gamma_t)
-        norm2 = torch.tensor([0.0j])
+        norm2 = torch.tensor([0.0j]).to(self.device)
         # slip array of trajectories into `nchunk` chunks
         nchunk = self.ntraj // 1000 + 1
         for qi,pi,vi in zip(torch.chunk(q,nchunk,dim=1), 
@@ -642,7 +629,7 @@ class HermanKlukPropagator(object):
                 # norm = sqrt( sum_{i,j} v[i]^* olap[i,j] * v[j] )
                 # contribution from blocks i and j to norm
                 norm2 += torch.einsum('i,ij,j', vi.conj(), olap_ij, vj)
-        norm = torch.sqrt( norm2.real )
+        norm = torch.sqrt( norm2.real ).item()
 
         #logger.info(f"|psi|= {norm}")
 
@@ -699,7 +686,7 @@ class HermanKlukPropagator(object):
         #
         cauto = torch.sum(cauto_qp/(self.ntraj * self.probi)) /  (2*np.pi*hbar)**self.dim
     
-        return cauto
+        return cauto.item()
     
     def ic_correlation(self, potential, energy0_es=0.0):
         """
@@ -742,7 +729,7 @@ class HermanKlukPropagator(object):
         tau1Q = potential.derivative_coupling_1st(Q)
         tau2Q = potential.derivative_coupling_2nd(Q)
         
-        masses = potential.masses()
+        masses = potential.masses().to(self.device)
         # eqn. (89)
         n1q = - hbar**2 * torch.einsum('k,kn->kn', 1.0/masses, tau1q)
         n1Q = - hbar**2 * torch.einsum('k,kn->kn', 1.0/masses, tau1Q)
@@ -767,7 +754,7 @@ class HermanKlukPropagator(object):
             
         kic_t = torch.sum(kic_t_qp/(self.ntraj * self.probi)) /  (2*np.pi*hbar)**self.dim
 
-        return kic_t
+        return kic_t.item()
     
     # methods for data access 
     def initial_positions_and_momenta(self):
@@ -844,15 +831,8 @@ class HermanKlukPropagator(object):
         # To compute the determinants for a batch of matrices, the matrices have to be stacked
         # along the 0-th dimension, i.e. the array has to have the shape (ntraj,d,d), not (d,d,ntraj)
         mat = mat.permute(2,0,1)
-        # Determinants of complex matrices are not yet implemented in pytorch, so that we have
-        # to fall back to ...
-        # ... our own implementation
-        c2 = _complex_det(mat)
-        """
-        # ... or numpy
-        c2 = torch.tensor(la.det(mat))
-        # 
-        """
+        c2 = torch.det(mat)
+        
         self.c = torch.sqrt(c2)
            
         # store C^2(t) for aligning signs relative to C^2(t-dt) stored in self.sqrt2_last
@@ -930,21 +910,24 @@ class HermanKlukPropagator(object):
 
 
 class WaltonManolopoulosPropagator(HermanKlukPropagator):
-    def __init__(self, Gamma_i, Gamma_t, beta):
+    def __init__(self, Gamma_i, Gamma_t, beta, device='cpu'):
         """
         semiclassical Herman-Kluk propagator
         
         Parameters
         ----------
-        Gamma_i  :  real Tensor (dim,dim)
+        Gamma_i  :  real, symmetric Tensor (dim,dim)
           width parameter matrix of initial coherent states at t=0
-        Gamma_t  :  real Tensor (dim,dim)
+        Gamma_t  :  real, symmetric Tensor (dim,dim)
           width parameter matrix of coherent states at later times t
         beta     :  float > 0
           inverse width of phase space cell over which the HK propagator
           integrated out
+        device   :  str
+          default device (usually 'gpu' or 'cuda') used for initializing all tensors. 
+          All calculations of the propagator will be run on this device.
         """
-        super().__init__(Gamma_i, Gamma_t)
+        super().__init__(Gamma_i, Gamma_t, device=device)
         self.beta = beta
     def _expand_L(self):
         """
@@ -1011,6 +994,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
     def _prefactor(self):
         # compute Herman-Kluk prefactor C
         super()._prefactor()
+        device = self.device
         # compute Walton-Manolopoulos prefactor
         #
         # In the Einstein summations the indices have the following meanings:
@@ -1026,10 +1010,10 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         Mqz = torch.cat((Mqq,Mqp), dim=1)
         Mpz = torch.cat((Mpq,Mpp), dim=1)
         # eqn. (40)
-        Eqz = torch.cat((torch.eye(d), torch.zeros(d,d)), dim=1).unsqueeze(2).expand_as(Mqz)
-        Epz = torch.cat((torch.zeros(d,d), torch.eye(d)), dim=1).unsqueeze(2).expand_as(Mpz)
+        Eqz = torch.cat((torch.eye(d), torch.zeros(d,d)), dim=1).to(device).unsqueeze(2).expand_as(Mqz)
+        Epz = torch.cat((torch.zeros(d,d), torch.eye(d)), dim=1).to(device).unsqueeze(2).expand_as(Mpz)
         # (2 dim) x (2 dim) identity matrix for n trajectories
-        Id = torch.eye(2*d).unsqueeze(2).expand(-1,-1,n)
+        Id = torch.eye(2*d).to(device).unsqueeze(2).expand(-1,-1,n)
         # eqn. (50)
         A = 2*self.beta * Id - hessL + (
              torch.einsum('jin,jk,kln->iln', Mqz, self.Gamma_t, Mqz)
@@ -1095,7 +1079,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
 
         # To compute the determinant of a batch of matrices, the axes have to be 
         # ordered as (ntraj,2*dim,2*dim) not (2*dim,2*dim,ntraj).
-        detA = _complex_det(A.permute(2,0,1))
+        detA = torch.det(A.permute(2,0,1))
             
         # We have to choose the signs of sqrt(det(A)) such that a continuous
         # function of time results
@@ -1115,7 +1099,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         # inverse of M
         iM = torch.inverse(M.permute(2,0,1)).permute(1,2,0)
         # determinant of M
-        detM = _complex_det(M.permute(2,0,1))
+        detM = torch.det(M.permute(2,0,1))
         
         # batches of dim x dim matrices
         # eqn. (79)
@@ -1211,7 +1195,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         q,p = q.type(torch.complex128), p.type(torch.complex128)
         Q,P = Q.type(torch.complex128), P.type(torch.complex128)    
             
-        phi = torch.zeros(nx, dtype=torch.complex128)
+        phi = torch.zeros(nx, dtype=torch.complex128).to(device)
         nchunk = nx // 100 + 1
         # Split the spatial grid into chunks and compute the wavefunction on each chunk.
         for x_,phi_ in zip(torch.chunk(x,nchunk,dim=1), 
@@ -1229,7 +1213,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
                     +1j/hbar * torch.einsum('in,inx->nx', self.PIQ, x_-Q_)),
                 dim=0)
             
-        return phi.detach().numpy()
+        return phi.detach().cpu().numpy()
     
     def norm(self):
         """
@@ -1260,7 +1244,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         # The computation of the overlap matrix O[i,j] = <qi,pi|qj,pj> is split into blocks to avoid running
         # out of memory. The vector of coefficients is also split into chunks and the norm is obtained
         # by accumulating the terms v^T.O.v from all combinations of blocks.
-        norm2 = torch.tensor([0.0j])
+        norm2 = torch.tensor([0.0j]).to(self.device)
         # slip array of trajectories into `nchunk` chunks
         nchunk = self.ntraj // 1000 + 1
         #
@@ -1291,7 +1275,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
                 # inverse of D^(ij) = C_QQ^(i)^* + C_QQ^(j) and restore original order of axes
                 iDij = torch.inverse(Dij).permute(2,3,0,1)
                 # determinant of D^(ij)
-                detDij = _complex_det(Dij)
+                detDij = torch.det(Dij)
                 #
                 bij = torch.einsum('abij,bij->aij', CQQj_, dQij) + di_.conj() + dj_
                 
@@ -1309,7 +1293,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
                 # contribution from blocks i and j to norm
                 norm2 += torch.einsum('i,ij,j', vi.conj(), olap_ij, vj)
 
-        norm = torch.sqrt( norm2.real )
+        norm = torch.sqrt( norm2.real ).item()
 
         #logger.info(f"|psi|= {norm}")
 
@@ -1378,7 +1362,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         #
         cauto = torch.sum(cauto_qp/(self.ntraj * self.probi)) /  (2*np.pi*hbar)**self.dim
     
-        return cauto
+        return cauto.item()
     
     def ic_correlation(self, potential, energy0_es=0.0):
         """
@@ -1419,7 +1403,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         tau1Q = potential.derivative_coupling_1st(Q)
         tau2Q = potential.derivative_coupling_2nd(Q)
         
-        masses = potential.masses()
+        masses = potential.masses().to(self.device)
         # eqn. (89)
         n1q = - hbar**2 * torch.einsum('k,kn->kn', 1.0/masses, tau1q).type(torch.complex128)
         n1Q = - hbar**2 * torch.einsum('k,kn->kn', 1.0/masses, tau1Q).type(torch.complex128)
@@ -1447,5 +1431,5 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         # integrate over initial conditions with appropriate weights from Monte-Carlo integration
         kic_t = torch.sum(kic_t_qp/(self.ntraj * self.probi)) /  (2*np.pi*hbar)**self.dim
 
-        return kic_t
+        return kic_t.item()
 

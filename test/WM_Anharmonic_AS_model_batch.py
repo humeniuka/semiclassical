@@ -23,6 +23,7 @@ anharmonicity = float(sys.argv[2])
 print(f"number of samples : {num_samples}")
 print(f"anharmonicity chi : {anharmonicity}")
 
+
 # # GPU or CPU ?
 torch.set_default_dtype(torch.float64)
 if torch.cuda.is_available():
@@ -30,9 +31,7 @@ if torch.cuda.is_available():
     device = torch.device('cuda')
 else:
     device = torch.device('cpu')
-print(device)
-
-
+    
 # # Adiabatic Shift Model
 
 dat_file = "DATA/huang_rhys_nacs_AS.dat"
@@ -64,11 +63,11 @@ chi = torch.tensor([anharmonicity]).expand_as(omega)
 potential = MorsePotential(omega, chi, nac)
 
 # width of initial wavepacket psi(x,t=0) on the excited state
-alpha = 0.5*omega
+Gamma_0 = torch.diag(omega)
 # center of initial wavepacket
 q0 = dQ
 # momentum of initial wavepacket
-p0 = 0.0*dQ
+p0 = 0.0*q0
 
 # zero-point energy of the excited state potential
 en0 = torch.sum(hbar/2.0 * omega).item()
@@ -92,11 +91,13 @@ Gamma_i = torch.diag(omega)
 Gamma_t = Gamma_i
 beta = 100.0
 
-#propagator = HermanKlukPropagator(Gamma_i, Gamma_t, beta)
-propagator = WaltonManolopoulosPropagator(Gamma_i, Gamma_t, beta)
+# make random numbers reproducible
+#torch.manual_seed(0)
+
+#propagator = HermanKlukPropagator(Gamma_i, Gamma_t, beta, device=device)
+propagator = WaltonManolopoulosPropagator(Gamma_i, Gamma_t, beta, device=device)
 
 # initial conditions
-Gamma_0 = torch.diag(omega)
 propagator.initial_conditions(q0, p0, Gamma_0, ntraj=num_samples)
 
 # save autocorrelation function for each time step
@@ -104,9 +105,6 @@ autocorrelation = np.zeros((nt,), dtype=complex)
 
 # correlation function for internal conversion
 ic_correlation = np.zeros((nt,), dtype=complex)
-
-# make random numbers reproducible
-#torch.manual_seed(0)
 
 for t in range(0, nt):
     autocorrelation[t] = propagator.autocorrelation()

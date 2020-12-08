@@ -68,8 +68,8 @@ class NonHarmonicPotential(object):
         v  :  real Tensor (n,)
           potential energies
         """
-        eps = self.eps.unsqueeze(0).expand_as(r)
-        b   = self.b.unsqueeze(0).expand_as(r)
+        eps = self.eps.to(r.device).unsqueeze(0).expand_as(r)
+        b   = self.b.to(r.device).unsqueeze(0).expand_as(r)
         
         v = eps/(2*b**2) * (1.0 - torch.exp(- b*r))**2 + (1-eps)*0.5*r**2
         vpot = torch.sum(v, 0)
@@ -89,8 +89,8 @@ class NonHarmonicPotential(object):
         grad  :  real Tensor (dim,n)
           batch of gradient vectors
         """
-        eps = self.eps.unsqueeze(0).expand_as(r)
-        b   = self.b.unsqueeze(0).expand_as(r)
+        eps = self.eps.to(r.device).unsqueeze(0).expand_as(r)
+        b   = self.b.to(r.device).unsqueeze(0).expand_as(r)
         
         grad = eps/b * (torch.exp(-b*r) - torch.exp(-2*b*r)) + (1-eps)*r
         
@@ -113,12 +113,12 @@ class NonHarmonicPotential(object):
         hess  :  real Tensor (dim,dim,n)
           batch of Hessian matrices
         """
-        eps = self.eps.unsqueeze(0).expand_as(r)
-        b   = self.b.unsqueeze(0).expand_as(r)
+        eps = self.eps.to(r.device).unsqueeze(0).expand_as(r)
+        b   = self.b.to(r.device).unsqueeze(0).expand_as(r)
 
         dim,n = r.size()
         
-        hess = torch.zeros((dim,dim,n))
+        hess = torch.zeros((dim,dim,n)).to(r.device)
         hess_diag = torch.diagonal(hess, dim1=0, dim2=1)
 
         hess_diag[...] = torch.transpose(
@@ -225,14 +225,14 @@ class MorsePotential(object):
         """V(r)"""
         if (self.chi == 0.0).all():
             # potential is harmonic
-            omega = self.omega.unsqueeze(1).expand_as(r)
+            omega = self.omega.to(r.device).unsqueeze(1).expand_as(r)
             v = 0.5 * omega**2 * r**2
             vpot = torch.sum(v, 0)
             return vpot
         else:
             # anharmonic Morse potential
-            a = self.a.unsqueeze(1).expand_as(r)
-            D = self.D.unsqueeze(1).expand_as(r)
+            a = self.a.to(r.device).unsqueeze(1).expand_as(r)
+            D = self.D.to(r.device).unsqueeze(1).expand_as(r)
         
             v = D * (1.0 - torch.exp(-a*r))**2
             vpot = torch.sum(v, 0)
@@ -242,13 +242,13 @@ class MorsePotential(object):
         """dV/dr"""
         if (self.chi == 0.0).all():
             # harmonic potential
-            omega = self.omega.unsqueeze(1).expand_as(r)
+            omega = self.omega.to(r.device).unsqueeze(1).expand_as(r)
             grad = omega**2 *r
             return grad
         else:
             # anharmonic Morse potential
-            a = self.a.unsqueeze(1).expand_as(r)
-            D = self.D.unsqueeze(1).expand_as(r)
+            a = self.a.to(r.device).unsqueeze(1).expand_as(r)
+            D = self.D.to(r.device).unsqueeze(1).expand_as(r)
         
             grad = 2*a*D*torch.exp(-a*r)*(1.0-torch.exp(-a*r))
         
@@ -258,11 +258,11 @@ class MorsePotential(object):
         """d^2(V)/dr(i)dr(j)"""
         if (self.chi == 0.0).all():
             # harmonic potential
-            omega = self.omega.unsqueeze(1).expand_as(r)
+            omega = self.omega.to(r.device).unsqueeze(1).expand_as(r)
             
             dim,n = r.size()
             
-            hess = torch.zeros((dim,dim,n))
+            hess = torch.zeros((dim,dim,n)).to(r.device)
             hess_diag = torch.diagonal(hess, dim1=0, dim2=1)
             
             hess_diag[...] = torch.transpose(
@@ -271,12 +271,12 @@ class MorsePotential(object):
             return hess
         else:
             # anharmonic Morse potential
-            a = self.a.unsqueeze(1).expand_as(r)
-            D = self.D.unsqueeze(1).expand_as(r)
+            a = self.a.to(r.device).unsqueeze(1).expand_as(r)
+            D = self.D.to(r.device).unsqueeze(1).expand_as(r)
 
             dim,n = r.size()
 
-            hess = torch.zeros((dim,dim,n))
+            hess = torch.zeros((dim,dim,n)).to(r.device)
             hess_diag = torch.diagonal(hess, dim1=0, dim2=1)
 
             hess_diag[...] = torch.transpose(

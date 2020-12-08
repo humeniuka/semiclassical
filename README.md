@@ -13,7 +13,11 @@ Milestones
 
 
 Complex numbers are not supported in older releases of pytorch, 
-this code requires pytorch=1.7.0 or higher
+this code requires pytorch=1.8.0 or higher.
+pytorch=1.8.0 is available from the channel pytorch-nightly
+
+ $ conda install pytorch --channel pytorch-nightly
+
 
 References
 ----------
