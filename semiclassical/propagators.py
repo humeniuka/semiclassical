@@ -1157,7 +1157,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         
         # x-independent part of exponent in eqn. (75)
         v = v * torch.exp(
-                -0.5 * torch.einsum('in,ij,jn->n', q0-q, self.Cqq, q0-q)
+                -0.5 * torch.einsum('in,ijn,jn->n', q0-q, self.Cqq, q0-q)
             -1j/hbar * torch.einsum('in,in->n', self.PIq, q0-q) )
         
         # We also have to divide by the probability to sample (qi,pi), i.e. n*P(qi,pi)
@@ -1195,7 +1195,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         q,p = q.type(torch.complex128), p.type(torch.complex128)
         Q,P = Q.type(torch.complex128), P.type(torch.complex128)    
             
-        phi = torch.zeros(nx, dtype=torch.complex128).to(device)
+        phi = torch.zeros(nx, dtype=torch.complex128).to(self.device)
         nchunk = nx // 100 + 1
         # Split the spatial grid into chunks and compute the wavefunction on each chunk.
         for x_,phi_ in zip(torch.chunk(x,nchunk,dim=1), 
