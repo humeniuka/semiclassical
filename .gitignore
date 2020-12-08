@@ -1,0 +1,13 @@
+/build
+/dist
+/semiclassical.egg-info
+# ignore large files with numerical data
+**/*.npz
+# ignore architecture dependent files
+**/*.so
+**/*.o
+**/*.pyc
+__pychache__/
+# ignore emacs backup files
+*~
+\#*\#
