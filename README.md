@@ -21,7 +21,7 @@ pytorch=1.8.0 is available from the channel pytorch-nightly
 
 References
 ----------
-[2] E. Kluk, M. Herman, H. Davis,
+[HK] E. Kluk, M. Herman, H. Davis,
     "Comparison of the propagation of semiclassical frozen Gaussian wave functions with quantum propagation for a highly excited anharmonic oscillator",
     J. Chem. Phys. 84, 326, (1986)
     

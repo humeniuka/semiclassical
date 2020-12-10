@@ -35,12 +35,16 @@ def _sym_sqrtm(A):
     
     Returns
     -------
-    sqA  :  real Tensor (n,n)
+    sqA  :  complex Tensor (n,n)
        square root of A, such that sqA.sqA = A
     """
     # eigenvalue decomposition of symmetric A
     #  A = V.diag(e).V^{T}
     e, V = torch.symeig(A, eigenvectors=True)
+    # In order to be able to compute the square roots of negative
+    # numbers, we have to cast e and V to complex type.
+    e = e.type(torch.complex128)
+    V = V.type(torch.complex128)
     # We compute the root of the eigenvalues and transform back
     # from the basis of eigenvectors
     # A^{1/2} = V.diag(sqrt(e)).V^{T}
@@ -347,6 +351,10 @@ class HermanKlukPropagator(object):
         device   :  str
           default device (usually 'gpu' or 'cuda') used for initializing all tensors. 
           All calculations of the propagator will be run on this device.
+
+        Notes
+        -----
+        Gamma_i and Gamma_t should be positive definite matrices.
         """
         # default device
         self.device = device
@@ -803,6 +811,9 @@ class HermanKlukPropagator(object):
         according to eqn. (29)
         """
         Mqq,Mqp,Mpq,Mpp = self.monodromy_matrices()
+        # change data type  real -> complex
+        Mqq, Mqp, Mpq, Mpp = (Mqq.type(torch.complex128), Mqp.type(torch.complex128),
+                              Mpq.type(torch.complex128), Mpp.type(torch.complex128))
         
         sqGi = self.sqGi
         sqGt = self.sqGt
