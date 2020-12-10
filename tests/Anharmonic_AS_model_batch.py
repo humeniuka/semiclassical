@@ -13,16 +13,18 @@ from semiclassical.broadening import gaussian
 from semiclassical.rates import internal_conversion_rate
 from semiclassical import units
 
-if len(sys.argv) < 3:
-    print("Expected argument: <number of samples> <anharmonicity>")
+if len(sys.argv) < 4:
+    print("Expected argument: <number of samples> <anharmonicity> <propagator>")
     exit(-1)
 
 num_samples = int(sys.argv[1])
 anharmonicity = float(sys.argv[2])
+propagator_name = sys.argv[3]
+assert propagator_name in ["HK", "WM"]
 
 print(f"number of samples : {num_samples}")
 print(f"anharmonicity chi : {anharmonicity}")
-
+print(f"propagator        : {propagator_name}")
 
 # # GPU or CPU ?
 torch.set_default_dtype(torch.float64)
@@ -38,6 +40,11 @@ dat_file = "DATA/huang_rhys_nacs_AS.dat"
 
 # load frequencies, Huang-Rhys factors and NACs
 data = torch.from_numpy(np.loadtxt(dat_file))
+
+if len(data.shape) == 1:
+    # When only singly mode is read, data has the wrong shape
+    #  (ncol,) -> (1,ncol)
+    data = np.reshape(data, (1, len(data)))
 
 print("selected vibrational modes (cm^-1):")
 print(data[:,0])
@@ -64,6 +71,7 @@ potential = MorsePotential(omega, chi, nac)
 
 # width of initial wavepacket psi(x,t=0) on the excited state
 Gamma_0 = torch.diag(omega)
+
 # center of initial wavepacket
 q0 = dQ
 # momentum of initial wavepacket
@@ -76,9 +84,9 @@ en0 = torch.sum(hbar/2.0 * omega).item()
 # # Grid for Time Propagation
 
 # time grid
-nt = 4000                                // 40
+nt = 4000                           // 40
 # propagate for 150 fs 
-t_max = 150.0 / units.autime_to_fs       // 40
+t_max = 150.0 / units.autime_to_fs  /  40.0
 times = torch.linspace(0.0, t_max, nt)
 dt = times[1]-times[0]
 print(f"time step dt= {dt*units.autime_to_fs} fs")
@@ -94,9 +102,11 @@ beta = 100.0
 # make random numbers reproducible
 #torch.manual_seed(0)
 
-#propagator = HermanKlukPropagator(Gamma_i, Gamma_t, beta, device=device)
-propagator = WaltonManolopoulosPropagator(Gamma_i, Gamma_t, beta, device=device)
-
+if propagator_name == "WM":
+    propagator = WaltonManolopoulosPropagator(Gamma_i, Gamma_t, beta, device=device)
+else:
+    propagator = HermanKlukPropagator(Gamma_i, Gamma_t, device=device)
+    
 # initial conditions
 propagator.initial_conditions(q0, p0, Gamma_0, ntraj=num_samples)
 
@@ -111,11 +121,12 @@ for t in range(0, nt):
     ic_correlation[t] = propagator.ic_correlation(potential, energy0_es=en0)
     if t % 1 == 0:
         print(f"{t+1:6}/{nt:6}   time= {times[t]:10.4f}   time/fs= {times[t]*units.autime_to_fs:10.4f}")
-
+        norm = propagator.norm()
+        print(f"|psi|= {norm}")
     propagator.step(potential, dt)
 
 
-corr_file = "/tmp/correlation_chi%s_T0.dat" % anharmonicity
+corr_file = "/tmp/correlation_chi%s_T0_%s.dat" % (anharmonicity, propagator_name)
 # save correlation function k_ic(t)
 data = np.vstack( (times*units.autime_to_fs, ic_correlation.real, ic_correlation.imag) ).transpose()
 with open(corr_file, "w") as f:
@@ -136,7 +147,7 @@ lineshape = gaussian(sigma)
 
 # # Fourier transform
 
-kic_e = internal_conversion_rate(times, ic_correlation, lineshape, rate_file="/tmp/kICvsE_chi%s_T0.dat" % anharmonicity)
+kic_e = internal_conversion_rate(times, ic_correlation, lineshape, rate_file="/tmp/kICvsE_chi%s_T0_%s.dat" % (anharmonicity, propagator_name))
 
 
 

@@ -27,13 +27,14 @@ from semiclassical.propagators import _sym_sqrtm
 from semiclassical.propagators import HermanKlukPropagator, WaltonManolopoulosPropagator
 from semiclassical.potentials import NonHarmonicPotential, MorsePotential
 from semiclassical.propagators import hbar
+from semiclassical.propagators import CoherentStatesOverlap
+
+# make random numbers reproducible
+torch.manual_seed(0)
 
 class TestLinearAlgebra(unittest.TestCase):
     def test_sym_sqrtm(self):
-        """ tests the implementation of sqrtm(A) based on the eigenvalue decomposition"""
-        # make random numbers reproducible
-        torch.manual_seed(0)
-        
+        """ tests the implementation of sqrtm(A) based on the eigenvalue decomposition"""        
         # create random symmetric n x n  matrix
         n = 5
         A = 5.0 * 2.0*(torch.rand(n,n) - 0.5)
@@ -46,14 +47,29 @@ class TestLinearAlgebra(unittest.TestCase):
         
         self.assertTrue(np.isclose(sqA, sqA_scipy).all())
 
+class TestCoherentStates(unittest.TestCase):
+    """
+    check overlap integrals between multidimension coherent states
+    """
+    def test_normalization(self):
+        n = 5
+        # draw random numbers for positive definite, symmetric n x n matrix of width parameters
+        Gi = 5.0 * 2.0*(torch.rand(n,n) - 0.5)
+        # symmetrize
+        Gi = 0.5*(Gi + Gi.T)
+        # random numbers for position and momentum
+        qi,pi = torch.rand(n,1), torch.rand(n,1)
+        # check <qi,pi,Gi|qi,pi,Gi> = 1        
+        cso = CoherentStatesOverlap(Gi,Gi)
+        olap = cso(qi,pi, qi,pi)
+        self.assertEqual(olap.squeeze().item(), 1.0)
+        
 class TestSemiclassicalPropagators1D(unittest.TestCase):
     """
     run dynamics on anharmonic 1D potential described in Herman & Kluk (1986)
     and compare with exact QM dynamics
     """
     def setUp(self):
-        # make random numbers reproducible
-        torch.manual_seed(0)
 
         # # Grids for Time Propagation
         
@@ -230,6 +246,10 @@ class TestSemiclassicalPropagators1D(unittest.TestCase):
         self.assertTrue(np.isclose(autocorrelation, self.autocorrelation_qm, rtol=0.05).all())
         self.assertTrue(np.isclose(ic_correlation, self.ic_correlation_qm, rtol=0.1).all())
 
+        # check norm of wavefunction is ~ 1 at last time step
+        norm = propagator.norm()
+        self.assertAlmostEqual(norm, 1, delta=0.05)
+        
     def test_WaltonManolopoulosPropagator(self):
         # create WM propagator
         beta = 100.0
@@ -252,6 +272,9 @@ class TestSemiclassicalPropagators1D(unittest.TestCase):
         self.assertTrue(np.isclose(autocorrelation, self.autocorrelation_qm, rtol=0.05).all())
         self.assertTrue(np.isclose(ic_correlation, self.ic_correlation_qm, rtol=0.1).all())
 
+        # check norm of wavefunction is ~ 1 at last time step
+        norm = propagator.norm()
+        self.assertAlmostEqual(norm, 1, delta=0.05)
     
 if __name__ == "__main__":
     unittest.main()
