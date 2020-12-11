@@ -23,7 +23,7 @@ else:
     device = torch.device('cpu')
 
 # # Local Imports
-from semiclassical.propagators import _sym_sqrtm
+from semiclassical.propagators import _sym_sqrtm, _is_symmetric_positive
 from semiclassical.propagators import HermanKlukPropagator, WaltonManolopoulosPropagator
 from semiclassical.potentials import NonHarmonicPotential, MorsePotential
 from semiclassical.propagators import hbar
@@ -46,7 +46,20 @@ class TestLinearAlgebra(unittest.TestCase):
         sqA = _sym_sqrtm(A).numpy()
         
         self.assertTrue(np.isclose(sqA, sqA_scipy).all())
-
+    def test_is_symmetric_positive(self):
+        # create random symmetric, positive definite n x n  matrix
+        n = 5
+        # positive eigenvalues
+        e = torch.rand(n) + 0.1
+        # eigenvectors
+        V = 5.0 * 2.0*(torch.rand(n,n) - 0.5)
+        A = V @ torch.diag(e) @ V.T
+        self.assertTrue(_is_symmetric_positive(A))
+        # make A non-symmetric
+        A[0,1] = A[0,1] + 0.5
+        self.assertFalse(_is_symmetric_positive(A))
+        
+        
 class TestCoherentStates(unittest.TestCase):
     """
     check overlap integrals between multidimension coherent states
@@ -252,8 +265,10 @@ class TestSemiclassicalPropagators1D(unittest.TestCase):
         
     def test_WaltonManolopoulosPropagator(self):
         # create WM propagator
+        alpha = 100.0
         beta = 100.0
-        propagator = WaltonManolopoulosPropagator(self.Gamma_i, self.Gamma_t, beta, device=device)
+        propagator = WaltonManolopoulosPropagator(self.Gamma_i, self.Gamma_t, alpha, beta,
+                                                  device=device)
         propagator.initial_conditions(self.q0, self.p0, self.Gamma_0, ntraj=50000)
         
         # save autocorrelation functions for each time step

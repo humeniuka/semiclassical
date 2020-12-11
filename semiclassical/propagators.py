@@ -51,7 +51,29 @@ def _sym_sqrtm(A):
     sqA = torch.einsum('ij,j,kj->ik', V, torch.sqrt(e), V)
     
     return sqA
-    
+
+def _is_symmetric_positive(A, eps=1.0e-6):
+    """
+    check if a matrix A is symmetric (A = A^T) and positive definite (x^T.A.x > 0 for all x)
+
+    Parameters
+    ----------
+    A      :   real Tensor (n,n)
+
+    Returns
+    -------
+    ok     :   bool
+    """
+    # Is A symmetric, A = A^T ?
+    # check |A-A^T|/|A|  < eps
+    relerr = torch.sum(abs(A - A.T))/torch.sum(abs(A))
+    if (relerr > eps):
+        return False
+    # eigenvalue decomposition of symmetric A
+    #  A = V.diag(e).V^{T}
+    e, V = torch.symeig(A, eigenvectors=True)
+    # A is positive definite if all eigenvalues are positive.
+    return (e > 0.0).all()
 
 # # Fourth-Order Runge-Kutta Integrator
 
@@ -356,6 +378,8 @@ class HermanKlukPropagator(object):
         -----
         Gamma_i and Gamma_t should be positive definite matrices.
         """
+        assert _is_symmetric_positive(Gamma_i), "Gamma_i has to be symmetric and positive definite."
+        assert _is_symmetric_positive(Gamma_t), "Gamma_t has to be symmetric and positive definite."
         # default device
         self.device = device
         # move input tensors to device
@@ -399,7 +423,8 @@ class HermanKlukPropagator(object):
         Gamma_0 :  real Tensor (dim,dim)
           width parameter matrix
         """
-        assert Gamma_0.size() == self.Gamma_i.size(), "width parameter matrix Gamma_0 has wrong dimensions"
+        assert Gamma_0.size() == self.Gamma_i.size(), "Width parameter matrix Gamma_0 has wrong dimensions."
+        assert _is_symmetric_positive(Gamma_0), "Gamma_0 has to be symmetric and positive definite."
         # abbreviations
         n = ntraj
         d = q0.size()[0]
@@ -434,7 +459,8 @@ class HermanKlukPropagator(object):
         # mean and standard deviation of samples
         logger.info("== Initial Conditions ==")
         qi,pi = torch.split(zi,[d,d])
-        logger.info(f"number of trajectories= {n}")
+        logger.info(f"number of dimensions   :  {d}")
+        logger.info(f"number of trajectories :  {n}")
         logger.info(f"cov(q)= {torch.diag(cov_q)} \t std(q)^2= {torch.std(qi)**2}")
         logger.info(f"cov(p)= {torch.diag(cov_p)} \t std(p)^2= {torch.std(pi)**2}")
         logger.info(f"q0= {q0} \t <q>= {torch.mean(qi)}  ")
@@ -921,7 +947,7 @@ class HermanKlukPropagator(object):
 
 
 class WaltonManolopoulosPropagator(HermanKlukPropagator):
-    def __init__(self, Gamma_i, Gamma_t, beta, device='cpu'):
+    def __init__(self, Gamma_i, Gamma_t, alpha, beta, device='cpu'):
         """
         semiclassical Herman-Kluk propagator
         
@@ -931,15 +957,19 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
           width parameter matrix of initial coherent states at t=0
         Gamma_t  :  real, symmetric Tensor (dim,dim)
           width parameter matrix of coherent states at later times t
-        beta     :  float > 0
-          inverse width of phase space cell over which the HK propagator
-          integrated out
+        alpha, beta  :  float > 0
+          The HK propagator is integrated out over a phase space cell
+          whose width (position dimension) is proportional to (2 alpha)^{-dim/2}
+          and whose height (momentum dimension) is proportional to (2 beta)^{-dim/2}.
+          Smaller cells (larger alpha and beta) make the linerization of the
+          action more accurate but require more trajectories to converge.
         device   :  str
           default device (usually 'gpu' or 'cuda') used for initializing all tensors. 
           All calculations of the propagator will be run on this device.
         """
         super().__init__(Gamma_i, Gamma_t, device=device)
-        self.beta = beta
+        self.alpha = torch.tensor(alpha)
+        self.beta = torch.tensor(beta)
     def _expand_L(self):
         """
         The function 
@@ -1023,10 +1053,12 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         # eqn. (40)
         Eqz = torch.cat((torch.eye(d), torch.zeros(d,d)), dim=1).to(device).unsqueeze(2).expand_as(Mqz)
         Epz = torch.cat((torch.zeros(d,d), torch.eye(d)), dim=1).to(device).unsqueeze(2).expand_as(Mpz)
-        # (2 dim) x (2 dim) identity matrix for n trajectories
-        Id = torch.eye(2*d).to(device).unsqueeze(2).expand(-1,-1,n)
+        # (2 dim) x (2 dim) block matrix with scaled identities
+        Id_ab = (torch.block_diag(self.alpha * torch.eye(d), self.beta * torch.eye(d))
+                 .to(device)
+                 .unsqueeze(2).expand(-1,-1,n))
         # eqn. (50)
-        A = 2*self.beta * Id - hessL + (
+        A = 2*Id_ab - hessL + (
              torch.einsum('jin,jk,kln->iln', Mqz, self.Gamma_t, Mqz)
             +torch.einsum('jin,jk,kln->iln', Eqz, self.Gamma_i, Eqz)
             +2j/hbar * (
@@ -1091,7 +1123,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         # To compute the determinant of a batch of matrices, the axes have to be 
         # ordered as (ntraj,2*dim,2*dim) not (2*dim,2*dim,ntraj).
         detA = torch.det(A.permute(2,0,1))
-            
+        
         # We have to choose the signs of sqrt(det(A)) such that a continuous
         # function of time results
         self._track_signs_of_sqrt("detA", detA)
@@ -1153,7 +1185,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
             * torch.sqrt((2*np.pi)**d/self.detGi0) \
             * 1/(2*np.pi)**d \
             * C * torch.exp(1j/hbar * S) \
-            * (2*self.beta)**d / torch.sqrt(self.detA) * signs_detA \
+            * (2*torch.sqrt(self.alpha*self.beta))**d / torch.sqrt(self.detA) * signs_detA \
             * torch.exp(self.eps)
         
         q,p = self.initial_positions_and_momenta()
@@ -1335,7 +1367,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
                     * (torch.det(self.Gamma_i)/np.pi**d)**(1/4) \
                     * torch.sqrt((2*np.pi)**d/self.detGi0) \
                     * C * torch.exp(1j/hbar * S) \
-                    * (2*self.beta)**d / torch.sqrt(self.detA) * signs_detA \
+                    * (2*torch.sqrt(self.alpha*self.beta))**d / torch.sqrt(self.detA) * signs_detA \
                     * torch.sqrt((2*np.pi)**d/self.detM) * signs_detM \
                     * torch.exp(self.gamma)
         

@@ -49,6 +49,9 @@ if len(data.shape) == 1:
 print("selected vibrational modes (cm^-1):")
 print(data[:,0])
 
+# number of nuclear degrees of freedom
+dim = data.shape[1]
+
 # frequencies in Hartree
 omega = data[:,0] / units.hartree_to_wavenumbers
 # Huang-Rhys factors
@@ -84,9 +87,9 @@ en0 = torch.sum(hbar/2.0 * omega).item()
 # # Grid for Time Propagation
 
 # time grid
-nt = 4000                           // 40
+nt = 4000
 # propagate for 150 fs 
-t_max = 150.0 / units.autime_to_fs  /  40.0
+t_max = 150.0 / units.autime_to_fs
 times = torch.linspace(0.0, t_max, nt)
 dt = times[1]-times[0]
 print(f"time step dt= {dt*units.autime_to_fs} fs")
@@ -97,13 +100,20 @@ print(f"time step dt= {dt*units.autime_to_fs} fs")
 # choose width parameters of the frozen Gaussians equal to the normal mode frequencies
 Gamma_i = torch.diag(omega)
 Gamma_t = Gamma_i
-beta = 100.0
+
+# What is a reasonable value for beta?
+e, V = torch.symeig(Gamma_0, eigenvectors=True)
+alpha = 10.0 * e.max().item()
+beta = 10.0 * 1.0/e.min().item()
+
+print(f"alpha= {alpha}  beta = {beta}")
+print("volume of phase space cell V= ", np.sqrt(alpha*beta)**dim)
 
 # make random numbers reproducible
 #torch.manual_seed(0)
 
 if propagator_name == "WM":
-    propagator = WaltonManolopoulosPropagator(Gamma_i, Gamma_t, beta, device=device)
+    propagator = WaltonManolopoulosPropagator(Gamma_i, Gamma_t, alpha, beta, device=device)
 else:
     propagator = HermanKlukPropagator(Gamma_i, Gamma_t, device=device)
     
