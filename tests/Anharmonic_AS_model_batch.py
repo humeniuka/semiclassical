@@ -131,18 +131,25 @@ for t in range(0, nt):
     ic_correlation[t] = propagator.ic_correlation(potential, energy0_es=en0)
     if t % 1 == 0:
         print(f"{t+1:6}/{nt:6}   time= {times[t]:10.4f}   time/fs= {times[t]*units.autime_to_fs:10.4f}")
-        norm = propagator.norm()
-        print(f"|psi|= {norm}")
+        #norm = propagator.norm()
+        #print(f"|psi|= {norm}")
     propagator.step(potential, dt)
 
+# save autocorrelation function <phi(0)|phi(t)>
+autocorr_file = "/tmp/autocorrelation_chi%s_T0_%s.dat" % (anharmonicity, propagator_name)
+data = np.vstack( (times*units.autime_to_fs, autocorrelation.real, autocorrelation.imag) ).transpose()
+with open(autocorr_file, "w") as f:
+    f.write("# Time / fs         Re[<phi(0)|phi(t)>]   Im[<phi(0)|phi(t)>]\n")
+    np.savetxt(f, data)
+print(f"wrote table with autocorrelation function to '{autocorr_file}'")
 
-corr_file = "/tmp/correlation_chi%s_T0_%s.dat" % (anharmonicity, propagator_name)
-# save correlation function k_ic(t)
+# save IC correlation function k_ic(t)
+ic_corr_file = "/tmp/ic_correlation_chi%s_T0_%s.dat" % (anharmonicity, propagator_name)
 data = np.vstack( (times*units.autime_to_fs, ic_correlation.real, ic_correlation.imag) ).transpose()
-with open(corr_file, "w") as f:
+with open(ic_corr_file, "w") as f:
     f.write("# Time / fs         Re[k_IC(t)]         Im[k_IC(t)]\n")
     np.savetxt(f, data)
-print("wrote table with correlation function to '%s'" % corr_file)
+print(f"wrote table with correlation function to '{ic_corr_file}'")
 
 # lineshape function
 # The width is taken to be proportional to the spacing of the vibrational energy levels
