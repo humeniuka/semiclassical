@@ -1376,8 +1376,8 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
                 -0.5 * torch.einsum('in,ijn,jn->n', q0-q, self.Rqq, q0-q)
                 -0.5 * torch.einsum('in,ijn,jn->n', q0-Q, self.RQQ, q0-Q)
                 +      torch.einsum('in,ijn,jn->n', q0-q, self.RqQ, q0-Q)
-            -1j/hbar * torch.einsum('in,jn->n', self.Pq, q0-q)
-            +1j/hbar * torch.einsum('in,jn->n', self.PQ, q0-Q)
+            -1j/hbar * torch.einsum('in,in->n', self.Pq, q0-q)
+            +1j/hbar * torch.einsum('in,in->n', self.PQ, q0-Q)
         )
         return cauto_qp
     
