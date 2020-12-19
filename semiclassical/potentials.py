@@ -303,7 +303,7 @@ class MorsePotential(object):
         tau1  :  real Tensor (d,*)
           derivative coupling vector tau1(r)
         """
-        tau1 = torch.ones_like(r)
+        tau1 = self.nac.to(r.device).unsqueeze(1).expand_as(r)
         return tau1
     
     def derivative_coupling_2nd(self, r):

@@ -8,17 +8,20 @@ import unittest
 import numpy as np
 from numpy import fft
 import scipy.linalg as sla
+from scipy.interpolate import interp1d
 import logging
 
 # # Logging
 logger = logging.getLogger(__name__)
-logging.basicConfig(format="[testing] %(message)s", level=logging.ERROR)
+logging.basicConfig(format="[testing] %(message)s", level=logging.INFO)
 
 import torch
 torch.set_default_dtype(torch.float64)
 if torch.cuda.is_available():
     logger.info("CUDA available")
-    device = torch.device('cuda')
+    # If there are several GPU's available, we use the last one,
+    # i.e. "cuda:1" on a workstation with 2 GPUs.
+    device = torch.device("cuda:%d" % (torch.cuda.device_count()-1))
 else:
     device = torch.device('cpu')
 
@@ -28,6 +31,7 @@ from semiclassical.propagators import HermanKlukPropagator, WaltonManolopoulosPr
 from semiclassical.potentials import NonHarmonicPotential, MorsePotential
 from semiclassical.propagators import hbar
 from semiclassical.propagators import CoherentStatesOverlap
+from semiclassical import units
 
 # make random numbers reproducible
 torch.manual_seed(0)
@@ -290,7 +294,191 @@ class TestSemiclassicalPropagators1D(unittest.TestCase):
         # check norm of wavefunction is ~ 1 at last time step
         norm = propagator.norm()
         self.assertAlmostEqual(norm, 1, delta=0.05)
+
+class TestAdiabaticShiftModel(unittest.TestCase):
+    """
+    run dynamics on harmonic and anharmonic adiabatic shift (AS) model 
+    and compare correlation functions with the exact QM counterparts
+
+    The anharmonic AS model is described in DOI:10.1063/1.5143212
+
+    """
+    def _load_AS_model(self, num_modes=5, anharmonicity=0.0):
+        # load precalculated AS model and exact QM correlation functions for internal conversion
+        data_dir = f"DATA/AnharmonicAS/{num_modes}modes"
+        model_file = f"{data_dir}/AS_model.dat"
+        ic_corr_file = f"{data_dir}/ic_correlation_chi{anharmonicity:.2f}_T0.001.dat"
+        
+        # # Adiabatic Shift Model
+
+        # load frequencies, Huang-Rhys factors and NACs
+        data = torch.from_numpy(np.loadtxt(model_file))
+        
+        if len(data.shape) == 1:
+            # When only singly mode is read, data has the wrong shape
+            #  (ncol,) -> (1,ncol)
+            data = np.reshape(data, (1, len(data)))
+
+        # number of nuclear degrees of freedom
+        self.dim = data.shape[1]
+        
+        # frequencies in Hartree
+        omega = data[:,0] / units.hartree_to_wavenumbers
+        # Huang-Rhys factors
+        S = data[:,1]
+        # NACs
+        nac = data[:,2]
+        
+        # The horizontal shift dQ of the excited state PES is related to the Huang-Rhys factor
+        #  S = 1/2 dQ^2 omega
+        #  dQ = sqrt(2*|S|/omega) * sign(S)
+        dQ = torch.sqrt(2.0*abs(S)/omega) * torch.sign(S)
+        # The sign of S is not needed anymore, Huang-Rhys factors are always positive
+        S = abs(S)
+        
+        # # Grid for Time Propagation
+        # time grid
+        self.nt = 4000                         // 40
+        # propagate for 150 fs 
+        t_max = 150.0 / units.autime_to_fs     / 40.0
+        self.times = torch.linspace(0.0, t_max, self.nt)
+        self.dt = self.times[1]-self.times[0]
+        logger.info(f"time step dt= {self.dt*units.autime_to_fs} fs")
+
+
+        # save frequencies
+        self.omega = omega
+        # center of initial wavepacket
+        self.q0 = dQ
+        # momentum of initial wavepacket
+        self.p0 = 0.0*self.q0
+        
+        # zero-point energy of the excited state potential
+        self.en0 = torch.sum(hbar/2.0 * omega).item()
+
+        # anharmonicity
+        self.anharmonicity = anharmonicity
+        chi = torch.tensor([anharmonicity]).expand_as(self.omega)
+        
+        # ground state potential energy surface 
+        self.potential = MorsePotential(self.omega, chi, nac)
+
+
+        if anharmonicity == 0.0:
+            # # Harmonic Approximation
+            # In the harmonic approximation the correlation function $\tilde{k}_{ic}(t)$ can be computed exactly.
+            # The definition of the variables follows eqn. (15)-(27)
+            # in the supporting information of http://www.rsc.org/suppdata/c9/sc/c9sc05012d/c9sc05012d1.pdf
+
+            self.ic_correlation_qm = np.zeros(self.nt, dtype=complex)
+
+            # If the relative displacements dQ of the ground and excited state minima can be
+            # negative, we have to multiply A and B with the sign of the displacement.
+
+            A =  nac * torch.sqrt(omega/(2*S)) * torch.sign(dQ)
+            B = -nac * torch.sqrt((omega*S)/2) * torch.sign(dQ)
+            for t in range(0, self.nt):
+                Xt = S * torch.exp(-1j*omega*self.times[t])
+                self.ic_correlation_qm[t] = ( 2*np.pi/hbar
+                                              * torch.prod(torch.exp(-S+Xt))
+                                              * (torch.sum(A*Xt+B)**2 + torch.sum(A**2*Xt)) )
+
+        else:
+            # QM correlation function for anharmonicity > 0 has been precalculated.
+            ic_data = np.loadtxt(ic_corr_file)
+            times = ic_data[:,0] / units.autime_to_fs
+            real, imag = ic_data[:,1], ic_data[:,2]
+            # interpolate precalculated correlation function on the time grid
+            self.ic_correlation_qm = (      interp1d(times, real)(self.times)
+                                       + 1j*interp1d(times, imag)(self.times) )
+            
+        # save IC correlation function k_ic(t)
+        ic_corr_file = "/tmp/ic_correlation_chi%s_qm.dat" % self.anharmonicity
+        data = np.vstack( (self.times*units.autime_to_fs, self.ic_correlation_qm.real, self.ic_correlation_qm.imag) ).transpose()
+        with open(ic_corr_file, "w") as f:
+            f.write("# Time / fs         Re[k_IC(t)]         Im[k_IC(t)]\n")
+            np.savetxt(f, data)
+        logger.info(f"wrote table with correlation function to '{ic_corr_file}'")
+
+        
+    def _run_semiclassical_dynamics(self, propagator_name="HK", ntraj=50000):
+        # width of initial wavepacket psi(x,t=0) on the excited state
+        Gamma_0 = torch.diag(self.omega)
+        # choose width parameters of the frozen Gaussians equal to the normal mode frequencies
+        Gamma_i = torch.diag(self.omega)
+        Gamma_t = Gamma_i
+        
+        # What is a reasonable value for beta?
+        e, V = torch.symeig(Gamma_0, eigenvectors=True)
+        alpha = 10.0 * e.max().item()
+        beta = 10.0 * 1.0/e.min().item()
+
+        logger.info(f"alpha= {alpha}  beta = {beta}")
+        logger.info(f"volume of phase space cell V= {np.sqrt(alpha*beta)**self.dim}")
+
+        # make random numbers reproducible
+        torch.manual_seed(0)
+
+        if propagator_name == "WM":
+            logger.info("propagator: Walton-Manolopoulos")
+            propagator = WaltonManolopoulosPropagator(Gamma_i, Gamma_t, alpha, beta, device=device)
+        else:
+            logger.info("propagator: Herman-Kluk")
+            propagator = HermanKlukPropagator(Gamma_i, Gamma_t, device=device)
     
+        # initial conditions
+        propagator.initial_conditions(self.q0, self.p0, Gamma_0, ntraj=ntraj)
+
+        # save autocorrelation function for each time step
+        autocorrelation = np.zeros((self.nt,), dtype=complex)
+
+        # correlation function for internal conversion
+        ic_correlation = np.zeros((self.nt,), dtype=complex)
+
+        for t in range(0, self.nt):
+            autocorrelation[t] = propagator.autocorrelation()
+            ic_correlation[t] = propagator.ic_correlation(self.potential, energy0_es=self.en0)
+            if t % 1 == 0:
+                logger.info(f"{t+1:6}/{self.nt:6}   time= {self.times[t]:10.4f}   time/fs= {self.times[t]*units.autime_to_fs:10.4f}")
+                #norm = propagator.norm()
+                #print(f"|psi|= {norm}")
+            propagator.step(self.potential, self.dt)
+
+
+        # save IC correlation function k_ic(t)
+        ic_corr_file = "/tmp/ic_correlation_chi%s_%s.dat" % (self.anharmonicity, propagator_name)
+        data = np.vstack( (self.times*units.autime_to_fs, ic_correlation.real, ic_correlation.imag) ).transpose()
+        with open(ic_corr_file, "w") as f:
+            f.write("# Time / fs         Re[k_IC(t)]         Im[k_IC(t)]\n")
+            np.savetxt(f, data)
+        logger.info(f"wrote table with correlation function to '{ic_corr_file}'")
+
+
+        # compare semiclassical correlation functions with QM results
+        self.assertTrue(np.isclose(ic_correlation, self.ic_correlation_qm, rtol=0.1).all())
+
+        # check norm of wavefunction is ~ 1 at last time step
+        logger.info("computing wavefunction norm (scales like Ntraj^2)")
+        norm = propagator.norm()
+        self.assertAlmostEqual(norm, 1, delta=0.05)
+
+    def test_HermanKlukPropagator(self):
+        # test harmonic AS model with 5 modes
+        self._load_AS_model(num_modes=5, anharmonicity=0.0)
+        self._run_semiclassical_dynamics(propagator_name="HK", ntraj=50000)
+        # test anharmonic AS model with 5 modes
+        self._load_AS_model(num_modes=5, anharmonicity=0.02)
+        self._run_semiclassical_dynamics(propagator_name="HK", ntraj=50000)
+
+    def test_WaltonManolopoulosPropagator(self):
+        # test harmonic AS model with 5 modes
+        self._load_AS_model(num_modes=5, anharmonicity=0.0)
+        self._run_semiclassical_dynamics(propagator_name="WM", ntraj=50000)
+        # test anharmonic AS model with 5 modes
+        self._load_AS_model(num_modes=5, anharmonicity=0.02)
+        self._run_semiclassical_dynamics(propagator_name="WM", ntraj=50000)
+        
+        
 if __name__ == "__main__":
     unittest.main()
 

@@ -30,16 +30,18 @@ print(f"propagator        : {propagator_name}")
 torch.set_default_dtype(torch.float64)
 if torch.cuda.is_available():
     print("CUDA available")
-    device = torch.device('cuda')
+    # If there are several GPU's available, we use the last one,
+    # i.e. "cuda:1" on a workstation with 2 GPUs.
+    device = torch.device("cuda:%d" % (torch.cuda.device_count()-1))
 else:
     device = torch.device('cpu')
     
 # # Adiabatic Shift Model
 
-dat_file = "DATA/huang_rhys_nacs_AS.dat"
+model_file = "DATA/AnharmonicAS/10modes/AS_model.dat"
 
 # load frequencies, Huang-Rhys factors and NACs
-data = torch.from_numpy(np.loadtxt(dat_file))
+data = torch.from_numpy(np.loadtxt(model_file))
 
 if len(data.shape) == 1:
     # When only singly mode is read, data has the wrong shape
