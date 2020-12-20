@@ -1055,12 +1055,6 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         # eqn. (40)
         Eqz = torch.cat((torch.eye(d), torch.zeros(d,d)), dim=1).to(device).unsqueeze(2).expand_as(Mqz)
         Epz = torch.cat((torch.zeros(d,d), torch.eye(d)), dim=1).to(device).unsqueeze(2).expand_as(Mpz)
-        # (2 dim) x (2 dim) block matrix for Filinov transform
-        """"
-        filinov_ab = (torch.block_diag(self.alpha * torch.eye(d), self.beta * torch.eye(d))
-                      .to(device)
-                      .unsqueeze(2).expand(-1,-1,n))
-        """
         # The matrix for the Filinov contains G in the position block and its inverse in
         # the momentum block, so that the determinant
         #
@@ -1071,6 +1065,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         # remains the same as for the scaled identities
         #
         #  F = diag(a*Id, b*Id)
+        # (2 dim) x (2 dim) block matrix for Filinov transform
         filinov_ab = (torch.block_diag(self.alpha * 0.5*self.Gi0, self.beta * 2.0*self.iGi0)
                       .to(device)
                       .unsqueeze(2).expand(-1,-1,n))

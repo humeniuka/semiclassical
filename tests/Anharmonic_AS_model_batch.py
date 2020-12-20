@@ -35,7 +35,7 @@ outdir = sys.argv[5]
 assert propagator_name in ["HK", "WM"]
 
 # The trajectories are run in parallel in batches.
-batch_size = 1000 #50000
+batch_size = 5000 #50000
 num_repetitions = max(num_trajectories // batch_size, 1)
 num_samples = min(batch_size, num_trajectories)
 
@@ -52,10 +52,7 @@ if torch.cuda.is_available():
     logger.info("CUDA available")
     # If there are several GPU's available, we use the last one,
     # i.e. "cuda:1" on a workstation with 2 GPUs.
-    #device = torch.device("cuda:%d" % (torch.cuda.device_count()-1))
-    ### DEBUG
-    device = torch.device("cuda:0")
-    ###
+    device = torch.device("cuda:%d" % (torch.cuda.device_count()-1))
 else:
     device = torch.device('cpu')
     
@@ -124,13 +121,12 @@ logger.info(f"time step dt= {dt*units.autime_to_fs} fs")
 Gamma_i = torch.diag(omega)
 Gamma_t = Gamma_i
 
-# What is a reasonable value for beta?
-e, V = torch.symeig(Gamma_0, eigenvectors=True)
-alpha = 10.0 * e.max().item()
-beta = 10.0 * 1.0/e.min().item()
+# Choose cell dimensions (volume proportional to 1/(a*b)^(dim/2))
+alpha = 100.0
+beta = 100.0
 
 logger.info(f"alpha= {alpha}  beta = {beta}")
-logger.info(f"volume of phase space cell V= {np.sqrt(alpha*beta)**dim}")
+logger.info(f"volume of phase space cell V= {(1.0/(2*np.sqrt(alpha*beta)))**dim}")
 
 # make random numbers reproducible
 #torch.manual_seed(0)
