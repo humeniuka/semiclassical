@@ -407,11 +407,15 @@ class TestAdiabaticShiftModel(unittest.TestCase):
         # choose width parameters of the frozen Gaussians equal to the normal mode frequencies
         Gamma_i = torch.diag(self.omega)
         Gamma_t = Gamma_i
-        
-        # What is a reasonable value for beta?
+
+        # What are reasonable values for alpha and beta?
+        """
         e, V = torch.symeig(Gamma_0, eigenvectors=True)
         alpha = 10.0 * e.max().item()
         beta = 10.0 * 1.0/e.min().item()
+        """
+        alpha = 100.0
+        beta = 100.0
 
         logger.info(f"alpha= {alpha}  beta = {beta}")
         logger.info(f"volume of phase space cell V= {np.sqrt(alpha*beta)**self.dim}")

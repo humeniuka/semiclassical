@@ -398,8 +398,6 @@ class HermanKlukPropagator(object):
         # \Gamma_t^{-1/2}
         self.isqGt = torch.inverse(self.sqGt)
         
-        # time in a.u.
-        self.t = 0.0
     def initial_conditions(self, q0, p0, Gamma_0, ntraj=5000):
         """
         sample initial positions qi and momenta pi from the normalized probability distribution
@@ -511,6 +509,7 @@ class HermanKlukPropagator(object):
         self.p0 = p0
         self.Gamma_0 = Gamma_0
         #
+        self.Gi0 = Gi0
         self.detGi0 = torch.det(Gi0)
         self.iGi0 = torch.inverse(Gi0)
         # number of trajectories
@@ -523,6 +522,9 @@ class HermanKlukPropagator(object):
         self.y = yi
         # semiclassical prefactor
         self.c = torch.ones(n, dtype=torch.complex128).to(device)
+
+        # time in a.u.
+        self.t = 0.0
         
         # Initialize variables for t=0
         self._prefactor()
@@ -1053,12 +1055,28 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         # eqn. (40)
         Eqz = torch.cat((torch.eye(d), torch.zeros(d,d)), dim=1).to(device).unsqueeze(2).expand_as(Mqz)
         Epz = torch.cat((torch.zeros(d,d), torch.eye(d)), dim=1).to(device).unsqueeze(2).expand_as(Mpz)
-        # (2 dim) x (2 dim) block matrix with scaled identities
-        Id_ab = (torch.block_diag(self.alpha * torch.eye(d), self.beta * torch.eye(d))
-                 .to(device)
-                 .unsqueeze(2).expand(-1,-1,n))
+        # (2 dim) x (2 dim) block matrix for Filinov transform
+        """"
+        filinov_ab = (torch.block_diag(self.alpha * torch.eye(d), self.beta * torch.eye(d))
+                      .to(device)
+                      .unsqueeze(2).expand(-1,-1,n))
+        """
+        # The matrix for the Filinov contains G in the position block and its inverse in
+        # the momentum block, so that the determinant
+        #
+        #              ( a*G   0       )    d          d                d
+        #  det(F) = det(               ) = a  det(G)  b  1/det(G) = (ab)
+        #              (  0   b*G^{-1} )
+        #
+        # remains the same as for the scaled identities
+        #
+        #  F = diag(a*Id, b*Id)
+        filinov_ab = (torch.block_diag(self.alpha * 0.5*self.Gi0, self.beta * 2.0*self.iGi0)
+                      .to(device)
+                      .unsqueeze(2).expand(-1,-1,n))
+
         # eqn. (50)
-        A = 2*Id_ab - hessL + (
+        A = 2*filinov_ab - hessL + (
              torch.einsum('jin,jk,kln->iln', Mqz, self.Gamma_t, Mqz)
             +torch.einsum('jin,jk,kln->iln', Eqz, self.Gamma_i, Eqz)
             +2j/hbar * (
