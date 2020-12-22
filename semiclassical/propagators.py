@@ -508,8 +508,8 @@ class HermanKlukPropagator(object):
         self.q0 = q0
         self.p0 = p0
         self.Gamma_0 = Gamma_0
+        self.iGamma_0 = torch.inverse(Gamma_0)
         #
-        self.Gi0 = Gi0
         self.detGi0 = torch.det(Gi0)
         self.iGi0 = torch.inverse(Gi0)
         # number of trajectories
@@ -1066,7 +1066,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         #
         #  F = diag(a*Id, b*Id)
         # (2 dim) x (2 dim) block matrix for Filinov transform
-        filinov_ab = (torch.block_diag(self.alpha * 0.5*self.Gi0, self.beta * 2.0*self.iGi0)
+        filinov_ab = (torch.block_diag(self.alpha * self.Gamma_0, self.beta * self.iGamma_0)
                       .to(device)
                       .unsqueeze(2).expand(-1,-1,n))
 

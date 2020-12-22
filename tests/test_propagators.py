@@ -404,27 +404,21 @@ class TestAdiabaticShiftModel(unittest.TestCase):
     def _run_semiclassical_dynamics(self, propagator_name="HK", ntraj=50000):
         # width of initial wavepacket psi(x,t=0) on the excited state
         Gamma_0 = torch.diag(self.omega)
-        # choose width parameters of the frozen Gaussians equal to the normal mode frequencies
+        # Choose width parameters of the frozen Gaussians equal to the normal mode frequencies
         Gamma_i = torch.diag(self.omega)
         Gamma_t = Gamma_i
-
-        # What are reasonable values for alpha and beta?
-        """
-        e, V = torch.symeig(Gamma_0, eigenvectors=True)
-        alpha = 10.0 * e.max().item()
-        beta = 10.0 * 1.0/e.min().item()
-        """
-        alpha = 100.0
-        beta = 100.0
-
-        logger.info(f"alpha= {alpha}  beta = {beta}")
-        logger.info(f"volume of phase space cell V= {np.sqrt(alpha*beta)**self.dim}")
 
         # make random numbers reproducible
         torch.manual_seed(0)
 
         if propagator_name == "WM":
             logger.info("propagator: Walton-Manolopoulos")
+            # Choose cell dimensions (volume proportional to 1/(a*b)^(dim/2))
+            alpha = 500
+            beta = 500
+            logger.info(f"alpha= {alpha}  beta = {beta}")
+            logger.info(f"volume of phase space cell V= {(1.0/(2*np.sqrt(alpha*beta)))**self.dim}")
+            
             propagator = WaltonManolopoulosPropagator(Gamma_i, Gamma_t, alpha, beta, device=device)
         else:
             logger.info("propagator: Herman-Kluk")
@@ -461,10 +455,13 @@ class TestAdiabaticShiftModel(unittest.TestCase):
         # compare semiclassical correlation functions with QM results
         self.assertTrue(np.isclose(ic_correlation, self.ic_correlation_qm, rtol=0.1).all())
 
-        # check norm of wavefunction is ~ 1 at last time step
+        # Check norm of wavefunction is ~ 1 at last time step, this test takes very long
+        # and is therefore commented out.
+        """
         logger.info("computing wavefunction norm (scales like Ntraj^2)")
         norm = propagator.norm()
         self.assertAlmostEqual(norm, 1, delta=0.05)
+        """
 
     def test_HermanKlukPropagator(self):
         # test harmonic AS model with 5 modes
