@@ -86,6 +86,10 @@ dQ = torch.sqrt(2.0*abs(S)/omega) * torch.sign(S)
 # The sign of S is not needed anymore, Huang-Rhys factors are always positive
 S = abs(S)
 
+# select those modes as active for which the NAC is at least 10% of the
+# maximum NAC. 
+active_modes = torch.nonzero(abs(nac) > 0.1 * abs(nac).max()).squeeze(1)
+
 # anharmonicity
 chi = torch.tensor([anharmonicity]).expand_as(omega)
 
@@ -155,7 +159,9 @@ for repetition in range(0, num_repetitions):
     ic_correlation = np.zeros((nt,), dtype=complex)
 
     # initial conditions
-    propagator.initial_conditions(q0, p0, Gamma_0, ntraj=num_samples)
+    propagator.initial_conditions(q0, p0, Gamma_0,
+                                  ntraj=num_samples,
+                                  active_modes=active_modes)
 
     for t in range(0, nt):
         autocorrelation[t] += propagator.autocorrelation()

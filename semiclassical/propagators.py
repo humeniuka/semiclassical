@@ -398,7 +398,7 @@ class HermanKlukPropagator(object):
         # \Gamma_t^{-1/2}
         self.isqGt = torch.inverse(self.sqGt)
         
-    def initial_conditions(self, q0, p0, Gamma_0, ntraj=5000):
+    def initial_conditions(self, q0, p0, Gamma_0, ntraj=5000, active_modes=None):
         """
         sample initial positions qi and momenta pi from the normalized probability distribution
         
@@ -420,6 +420,16 @@ class HermanKlukPropagator(object):
           momentum of initial wavefunction
         Gamma_0 :  real Tensor (dim,dim)
           width parameter matrix
+
+        Optional
+        --------
+        ntraj        :  int
+          number of trajectories for which initial positions and momenta are sampled
+        active_modes :  int Tensor (< dim,)
+          indices of active degrees of freedom (0-based) or None to make all modes active.
+          During the sampling of initial conditions, inactive modes are clamped to the phase
+          space center of the wavepacket. Only the initial positions and momenta of active 
+          modes `i` differ from (q0[i],p0[i]).
         """
         assert Gamma_0.size() == self.Gamma_i.size(), "Width parameter matrix Gamma_0 has wrong dimensions."
         assert _is_symmetric_positive(Gamma_0), "Gamma_0 has to be symmetric and positive definite."
@@ -443,38 +453,99 @@ class HermanKlukPropagator(object):
         #
         # hbar^2 [Gi+G0]
         cov_p = hbar**2 * Gi0
+
+        if not active_modes is None:
+            assert (self.Gamma_i == self.Gamma_t).all() and (self.Gamma_i == Gamma_0).all(), \
+                "When using active modes all width parameter matrices should be equal to Gamma_0 of the initial wavepacket."
+
+            logger.info(f"number of active dimensions      : {len(active_modes)}")
+            logger.info(f"indices of active modes (0-based): {active_modes}")
+            # number of active dimensions
+            dact = len(active_modes)
+            # indices of active and inactive modes
+            active = torch.zeros(d, dtype=bool)
+            active[active_modes] = True
+            inactive = torch.logical_not(active)
+            # covariance matrix for active degrees of freedom
+            cov = torch.block_diag(cov_q[active,:][:,active], cov_p[active,:][:,active])
+            # center in phase space loc = (q0,p0)
+            loc = torch.cat((q0[active], p0[active]))
+            distribution = MultivariateNormal(loc, cov)
         
-        # covariance matrix
-        cov = torch.block_diag(cov_q, cov_p)
-        # center in phase space loc = (q0,p0)
-        loc = torch.cat((q0, p0))
-        distribution = MultivariateNormal(loc, cov)
+            # sample initial positions and momenta from normal distribution
+            # zi contains only the active degrees of freedom
+            zi = distribution.sample((ntraj,)).T
+            
+            # normalization constant, the wavefunction obtained as a superposition of frozen
+            # Gaussians has to be divided by the normalization constant `probi`.
+            # The wavefunction is assembled by Monte Carlo integration over the initial values.
+            # The normalization constants are the probabilities for sampling each of the initial
+            # values.
+            #
+            # Strictly speaking, the normalization constant should contain the factor
+            # 1/(2 pi)^dact instead of 1/(2 pi)^d, since the distribution is for a reduce space
+            # with dact dimensions. In all experssions of the form
+            #    /   dq dp
+            #    | ------------- .....
+            #    / (2 pi hbar)^d
+            # where one sums over initial values, the number of dimensions d should be replaced
+            # by the number of active dimensions, dact.
+            # Since the factors in the normalization and the volume element cancel in the end,
+            # we leave the expression a 1/(2 pi)^d.
+            # 
+            norm_fac = 1.0/((2*np.pi)**d * torch.sqrt(torch.det(cov)))
+            # mean (q0,p0)
+            mu = loc.unsqueeze(1).expand_as(zi)
+            # P(qi,pi) probability of sampling (qi,pi)
+            probi = norm_fac * torch.exp(-0.5 * torch.einsum('in,ij,jn->n', zi-mu, torch.inverse(cov), zi-mu))
+
+            qi_active,pi_active = torch.split(zi,[dact,dact])
+            qi,pi = torch.zeros((d,ntraj)).to(device), torch.zeros((d,ntraj)).to(device)
+            # randomly distributed samples around (q0,p0) for active dimensions
+            qi[active,:] = qi_active
+            pi[active,:] = pi_active
+            # centers of distribution (q0,p0) for inactive dimensions
+            qi[inactive,:] = q0[inactive].unsqueeze(1).expand(-1,ntraj)
+            pi[inactive,:] = p0[inactive].unsqueeze(1).expand(-1,ntraj)
+
+            # update zi with initial phase space positions in all dimensions
+            zi = torch.cat((qi,pi), 0)
+
+        else:
+            # all dimensions are active
+            
+            # covariance matrix
+            cov = torch.block_diag(cov_q, cov_p)
+            # center in phase space loc = (q0,p0)
+            loc = torch.cat((q0, p0))
+            distribution = MultivariateNormal(loc, cov)
         
-        # sample initial positions and momenta from normal distribution
-        zi = distribution.sample((ntraj,)).T
-        
+            # sample initial positions and momenta from normal distribution
+            zi = distribution.sample((ntraj,)).T
+            qi,pi = torch.split(zi,[d,d])
+
+            # normalization constant, the wavefunction obtained as a superposition of frozen
+            # Gaussians has to be divided by the normalization constant.
+            # The wavefunction is assembled by Monte Carlo integration over the initial values.
+            # The normalization constants are the probabilities for sampling each of the initial
+            # values.
+            norm_fac = 1.0/((2*np.pi)**d * torch.sqrt(torch.det(cov)))
+            # mean (q0,p0)
+            mu = loc.unsqueeze(1).expand_as(zi)
+            # P(qi,pi) probability of sampling (qi,pi)
+            probi = norm_fac * torch.exp(-0.5 * torch.einsum('in,ij,jn->n', zi-mu, torch.inverse(cov), zi-mu))
+
         # compare expected center and covariance of normal distribution with
         # mean and standard deviation of samples
         logger.info("== Initial Conditions ==")
-        qi,pi = torch.split(zi,[d,d])
         logger.info(f"number of dimensions   :  {d}")
         logger.info(f"number of trajectories :  {n}")
-        logger.info(f"cov(q)= {torch.diag(cov_q)} \t std(q)^2= {torch.std(qi)**2}")
-        logger.info(f"cov(p)= {torch.diag(cov_p)} \t std(p)^2= {torch.std(pi)**2}")
-        logger.info(f"q0= {q0} \t <q>= {torch.mean(qi)}  ")
-        logger.info(f"p0= {p0} \t <p>= {torch.mean(pi)}  ")
+        logger.info(f"For active dimensions the standard deviation should be zero.")
+        logger.info(f"cov(q)= {torch.diag(cov_q)} \t std(q)^2= {torch.std(qi,1)**2}")
+        logger.info(f"cov(p)= {torch.diag(cov_p)} \t std(p)^2= {torch.std(pi,1)**2}")
+        logger.info(f"q0= {q0} \t <q>= {torch.mean(qi,1)}  ")
+        logger.info(f"p0= {p0} \t <p>= {torch.mean(pi,1)}  ")
         logger.info("")
-
-        # normalization constant, the wavefunction obtained as a superposition of frozen
-        # Gaussians has to be divided by the normalization constant.
-        # The wavefunction is assembled by Monte Carlo integration over the initial values.
-        # The normalization constants are the probabilities for sampling each of the initial
-        # values.
-        norm_fac = 1.0/((2*np.pi)**d * torch.sqrt(torch.det(cov)))
-        # mean (q0,p0)
-        mu = loc.unsqueeze(1).expand_as(zi)
-        # P(qi,pi) probability of sampling (qi,pi)
-        probi = norm_fac * torch.exp(-0.5 * torch.einsum('in,ij,jn->n', zi-mu, torch.inverse(cov), zi-mu))
      
         # Initialize solution vector y (contains positions, momenta, monodromy matrix and classical action)
         yi = torch.zeros((2*d+4*d**2+1, n)).to(device)
