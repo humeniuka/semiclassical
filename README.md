@@ -8,7 +8,7 @@ Milestones
  * compare with exact QM rates for _anharmonic_ adiabatic shift (AS) model with 5,10,...,60 modes
  * compare with exact QM rates for different _harmonic_ models (AH, VH)
  * include Herzberg-Teller effect (coordinate dependence of non-adiabatic coupling vectors)
- * use TorchANI potential energies in ground state propagation
+ * implement Hessians for sGDML force field (*done*)
 
 
 
