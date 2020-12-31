@@ -43,7 +43,8 @@ class GDMLPredict(nn.Module):
         Parameters
         ----------
         model : Mapping
-            Obtained from :meth:`~train.GDMLTrain.train`.
+            Obtained from :meth:`~train.GDMLTrain.train`. 
+            It is assumed that the model uses atomic units (bohr for lengths and Hartree for energies).
 
         Notes
         -----
