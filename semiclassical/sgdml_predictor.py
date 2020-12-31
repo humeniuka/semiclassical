@@ -1,4 +1,7 @@
-#!/usr/bin/python
+# coding: utf-8
+"""sGDML force field"""
+
+__all__ = ['GDMLPredict']
 
 # MIT License
 #
@@ -43,9 +46,10 @@ class GDMLPredict(nn.Module):
             Obtained from :meth:`~train.GDMLTrain.train`.
 
         Notes
-        ------
-        On a CPU a Hessian calculation is roughly 5 times more expensive than a gradient calculation. On a GPU it is 10 times
-        more expensive than a gradient calculation. 
+        -----
+        On a CPU, a Hessian calculation is roughly 5 times more expensive than a gradient calculation. On a GPU, it is 10 times
+        more expensive than a gradient calculation. Batches of approximately 10000 medium-sized molecules can be computed per second
+        on a GPU. 
         """
         super().__init__()
 
