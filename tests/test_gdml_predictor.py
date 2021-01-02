@@ -11,7 +11,7 @@ import torch
 import logging
 import time
 
-from semiclassical.sgdml_predictor import  GDMLPredict
+from semiclassical.gdml_predictor import  GDMLPredict
 
 # # Logging
 logger = logging.getLogger(__name__)
@@ -37,13 +37,13 @@ class TestGDMLPredict(unittest.TestCase):
             logger.error("This test case requires the sgdml package (https://github.com/stefanch/sGDML) and the ase (Atomic Simulation Environment) package")
             raise err
         # model fitted to ground state forces of coumarin
-        model = np.load('DATA/sGDML/coumarin_forces_au-wB97XD_def2SVP-train200-sym1.npz', allow_pickle=True)
+        model = np.load('DATA/GDML/coumarin_forces_au-wB97XD_def2SVP-train200-sym1.npz', allow_pickle=True)
         # reference implementation
-        self.sgdml_ref = GDMLTorchPredict(model)
+        self.gdml_ref = GDMLTorchPredict(model)
         # new implementation with analytical Hessians
-        self.sgdml = GDMLPredict(model).to(device)
+        self.gdml = GDMLPredict(model).to(device)
         # load geometry
-        r,_ = io.read_xyz('DATA/sGDML/coumarin.xyz')
+        r,_ = io.read_xyz('DATA/GDML/coumarin.xyz')
         # convert from Angstrom to bohr
         r /= Bohr
         self.coords = torch.from_numpy(r).to(device)
@@ -64,7 +64,7 @@ class TestGDMLPredict(unittest.TestCase):
 
             t_start = time.time()
             # compute energy and Hessian with reference implementation
-            en_ref, force_ref = self.sgdml_ref.forward(rs_3N)
+            en_ref, force_ref = self.gdml_ref.forward(rs_3N)
             grad_ref = -force_ref.reshape(rs.size())
             
             t_end = time.time()
@@ -72,7 +72,7 @@ class TestGDMLPredict(unittest.TestCase):
 
             t_start = time.time()
             # and compare with this implementation
-            en, grad, hessian = self.sgdml.forward(rs)
+            en, grad, hessian = self.gdml.forward(rs)
 
             t_end = time.time()
             logger.info(f"timing new implementation, energy+gradient+hessian  : {t_end-t_start} seconds")
@@ -96,9 +96,9 @@ class TestGDMLPredict(unittest.TestCase):
         from ase.units import Bohr, Hartree
 
         # compute Hessian numerically using ASE
-        with open('DATA/sGDML/coumarin.xyz') as f:
+        with open('DATA/GDML/coumarin.xyz') as f:
             mol = next(read_xyz(f))
-        sgdml_calc = SGDMLCalculator('DATA/sGDML/coumarin_forces_au-wB97XD_def2SVP-train200-sym1.npz',
+        sgdml_calc = SGDMLCalculator('DATA/GDML/coumarin_forces_au-wB97XD_def2SVP-train200-sym1.npz',
                                      E_to_eV=Hartree,
                                      F_to_eV_Ang=Hartree/Bohr)
         mol.calc = sgdml_calc
@@ -110,7 +110,7 @@ class TestGDMLPredict(unittest.TestCase):
         hessian_numerical = vib.H * Bohr**2 / Hartree
 
         # compute analytic Hessian directly from sGDML model
-        hessian_analytical = self.sgdml.forward(self.coords)[2][0,:,:].cpu().numpy()
+        hessian_analytical = self.gdml.forward(self.coords)[2][0,:,:].cpu().numpy()
 
         # check that Hessian is symmetric
         err_sym = la.norm(hessian_analytical - hessian_analytical.T)

@@ -37,7 +37,7 @@ class GDMLPredict(nn.Module):
         """
         Predict molecular energies, gradients and Hessians from machine-learned GDML model.
 
-        This is a modified version of Stefan Chmiela's symmetric GDML potential (adapted from https://github.com/stefanch/sGDML)
+        This is a modified version of Stefan Chmiela's GDML potential (adapted from https://github.com/stefanch/sGDML)
         which can also predict second order derivatives (Hessians) of the potential energy.
 
         Parameters
