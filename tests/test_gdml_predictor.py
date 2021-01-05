@@ -17,7 +17,7 @@ from semiclassical.gdml_predictor import  GDMLPredict
 logger = logging.getLogger(__name__)
 logging.basicConfig(format="[testing] %(message)s", level=logging.INFO)
 
-import torch
+# GPU or CUDA?
 torch.set_default_dtype(torch.float64)
 if torch.cuda.is_available():
     logger.info("CUDA available")
