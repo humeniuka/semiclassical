@@ -27,10 +27,10 @@ __all__ = ['GDMLPredict']
 # SOFTWARE.
 
 import sys
-import logging
 import numpy as np
 import torch
 import torch.nn as nn
+
 
 class GDMLPredict(nn.Module):
     def __init__(self, model):
