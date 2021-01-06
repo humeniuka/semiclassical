@@ -289,7 +289,7 @@ def _equations_of_motion(t, y, potential):
     y   :  Tensor (4*d**2+2*d+1,n)
       current solution vector
     potential : object
-      potential energy surface implementing energy(q), gradient(q) and hessian(q) methods
+      potential energy surface implementing the method `harmonic_approximation(r)`
     """
     d = potential.dimensions()
     masses = potential.masses().to(y.device)
@@ -301,9 +301,7 @@ def _equations_of_motion(t, y, potential):
     Mpq = Mpq.view(d,d,-1)
     Mpp = Mpp.view(d,d,-1)
 
-    vpot = potential.energy(q)
-    grad = potential.gradient(q)
-    hess = potential.hessian(q)
+    vpot, grad, hess = potential.harmonic_approximation(q)
 
     #
     # d   dq_a(t)          dp_a(t)

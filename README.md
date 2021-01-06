@@ -4,6 +4,7 @@ from semiclassical molecular dynamics.
 
 Milestones
 ----------
+
  * implement Herman-Kluk and Walton-Manolopoulos semiclassical propagators (*done*)
  * compare with exact QM rates for _anharmonic_ adiabatic shift (AS) model with 5,10,...,60 modes
  * compare with exact QM rates for different _harmonic_ models (AH, VH)
@@ -18,9 +19,16 @@ pytorch=1.8.0 is available from the channel pytorch-nightly
 
  $ conda install pytorch --channel pytorch-nightly
 
+Installation
+------------
+
+```
+$ pip install -e .
+```
 
 References
 ----------
+
 [HK] E. Kluk, M. Herman, H. Davis,
     "Comparison of the propagation of semiclassical frozen Gaussian wave functions with quantum propagation for a highly excited anharmonic oscillator",
     J. Chem. Phys. 84, 326, (1986)

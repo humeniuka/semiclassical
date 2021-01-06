@@ -7,6 +7,10 @@ __all__ = ['NonHarmonicPotential', 'MorsePotential']
 # # Imports
 import torch
 import logging
+from ase.data import atomic_masses
+
+# # Local Imports
+from semiclassical.gdml_predictor import GDMLPredict
 
 # # Logging
 logger = logging.getLogger(__name__)
@@ -54,7 +58,7 @@ class NonHarmonicPotential(object):
         dim = self.eps.size()[0]
         return torch.ones(dim)
         
-    def energy(self, r):
+    def _energy(self, r):
         """
         evaluate potential energy V(r)
         
@@ -75,7 +79,7 @@ class NonHarmonicPotential(object):
         vpot = torch.sum(v, 0)
         return vpot
     
-    def gradient(self, r):
+    def _gradient(self, r):
         """
         evaluate gradient of potential energy dV/dr
         
@@ -96,7 +100,7 @@ class NonHarmonicPotential(object):
         
         return grad
     
-    def hessian(self, r):
+    def _hessian(self, r):
         """
         evaluate Hessian of potential energy surface
                    d^2 V
@@ -126,6 +130,34 @@ class NonHarmonicPotential(object):
                              0,1 )
             
         return hess
+
+    def harmonic_approximation(self, r):
+        """
+        local harmonic approximation to the potential energy surface around a point r:
+
+           V(r') = V(r) + [grad V(r)]^T . (r'-r) + 1/2 (r'-r)^T . [hess V(r)] . (r'-r)
+
+        This function computes the energies, gradients and Hessians for a batch of geometries.
+
+        Parameters
+        ----------
+        r  :  real Tensor (dim,n)
+          batch of position vectors
+
+        Returns
+        -------
+        vpot  :  real Tensor (n,)
+          potential energies
+        grad  :  real Tensor (dim,n)
+          batch of gradient vectors
+        hess  :  real Tensor (dim,dim,n)
+          batch of Hessian matrices
+        """
+        vpot = self._energy(r)
+        grad = self._gradient(r)
+        hess = self._hessian(r)
+        
+        return vpot, grad, hess
     
     def derivative_coupling_1st(self, r):
         """
@@ -221,7 +253,7 @@ class MorsePotential(object):
         dim = self.a.size()[0]
         return torch.ones(dim)
         
-    def energy(self, r):
+    def _energy(self, r):
         """V(r)"""
         if (self.chi == 0.0).all():
             # potential is harmonic
@@ -238,7 +270,7 @@ class MorsePotential(object):
             vpot = torch.sum(v, 0)
             return vpot
     
-    def gradient(self, r):
+    def _gradient(self, r):
         """dV/dr"""
         if (self.chi == 0.0).all():
             # harmonic potential
@@ -254,7 +286,7 @@ class MorsePotential(object):
         
             return grad
     
-    def hessian(self, r):
+    def _hessian(self, r):
         """d^2(V)/dr(i)dr(j)"""
         if (self.chi == 0.0).all():
             # harmonic potential
@@ -284,7 +316,35 @@ class MorsePotential(object):
                                  0,1 )
             
             return hess
-    
+
+    def harmonic_approximation(self, r):
+        """
+        local harmonic approximation to the potential energy surface around a point r:
+
+           V(r') = V(r) + [grad V(r)]^T . (r'-r) + 1/2 (r'-r)^T . [hess V(r)] . (r'-r)
+
+        This function computes the energies, gradients and Hessians for a batch of geometries.
+
+        Parameters
+        ----------
+        r  :  real Tensor (dim,n)
+          batch of position vectors
+
+        Returns
+        -------
+        vpot  :  real Tensor (n,)
+          potential energies
+        grad  :  real Tensor (dim,n)
+          batch of gradient vectors
+        hess  :  real Tensor (dim,dim,n)
+          batch of Hessian matrices
+        """
+        vpot = self._energy(r)
+        grad = self._gradient(r)
+        hess = self._hessian(r)
+        
+        return vpot, grad, hess
+        
     def derivative_coupling_1st(self, r):
         """
         first order derivative non-adiabatic coupling
@@ -327,3 +387,121 @@ class MorsePotential(object):
         tau2 = torch.zeros_like(r)
         return tau2
 
+
+class MolecularGDMLPotential(object):
+    """
+    machine-learned molecular potential (symmetric gradient-domain ML, sGDML)
+
+    Parameters
+    ----------
+    model_pot : NpzFile or mapping
+      Data for sGDML model fitted to reproduce the ground state potential energy surface.
+      It is assumed that the model uses atomic units (bohr for lengths and Hartree for energies).
+    model_nac : NpzFile or mapping
+      Data for sGDML model fitted to reproduce the first order non-adiabatic coupling vector
+      between the ground and excited state.
+    """
+    def __init__(self, model_pot, model_nac):
+        # predict energy, gradient and Hessian of ground state potential
+        self.gdml_pot = GDMLPredict(model_pot)
+        self.gdml_nac = GDMLPredict(model_nac)
+
+        assert model_pot['z'] == model_nac['z'], "GDML models for potential energy and NAC vector should be for the same molecule."
+        # mass in atomic units for each cartesian coordinate
+        self._masses = (torch.tensor([atomic_masses[z]*units.amu_to_aumass for z in model_pot['z']])
+                        .repeat(3))
+        self._dim = len(self._masses)
+        
+    def dimensions(self):
+        """
+        number of nuclear degrees of freedom
+        
+        Returns
+        -------
+        dim     :   int
+        """
+        return self._dim
+
+    def masses(self):
+        """
+        masses (in multiples of electron mass) for each degree of freedom
+        
+        Returns
+        -------
+        masses  :  real Tensor (dim,)
+        """
+        return self._masses
+        
+    def harmonic_approximation(self, r):
+        """
+        local harmonic approximation to the potential energy surface around a point r:
+
+           V(r') = V(r) + [grad V(r)]^T . (r'-r) + 1/2 (r'-r)^T . [hess V(r)] . (r'-r)
+
+        This function computes the energies, gradients and Hessians for a batch of geometries.
+
+        Parameters
+        ----------
+        r  :  real Tensor (dim,n)
+          batch of position vectors
+
+        Returns
+        -------
+        vpot  :  real Tensor (n,)
+          potential energies
+        grad  :  real Tensor (dim,n)
+          batch of gradient vectors
+        hess  :  real Tensor (dim,dim,n)
+          batch of Hessian matrices
+        """
+        if (self.gdml_pot.device != r.device):
+            self.gdml_pot.to(r.device)
+
+        vpot, grad, hess = self.gdml_pot.forward(r)
+        
+        return vpot, grad, hess
+
+    def derivative_coupling_1st(self, r):
+        """
+        first order derivative non-adiabatic coupling
+        
+               (1)           d
+            tau   = <ground|----- excited>        k=1,...,d
+               k            dx(k)
+               
+        Parameters
+        ----------
+        r  :  real Tensor (d,*)
+          nuclear coordinates
+        
+        Returns
+        -------
+        tau1  :  real Tensor (d,*)
+          derivative coupling vector tau1(r)
+        """
+        if (self.gdml_nac.device != r.device):
+            self.gdml_nac.to(r.device)
+
+        tau1 = self.gdml_nac.forward(r)[1]
+        return tau1
+    
+    def derivative_coupling_2nd(self, r):
+        """
+        second order derivative non-adiabatic coupling
+          
+               (2)           d^2
+            tau   = <ground|------- excited>       k=1,...,d
+               k            dx(k)^2
+        
+        Parameters
+        ----------
+        r  :  real Tensor (d,*)
+          nuclear coordinates
+        
+        Returns
+        -------
+        tau2  :  real Tensor (d,*)
+          2nd order derivative coupling tau2(r)   
+        """
+        tau2 = torch.zeros_like(r)
+        return tau2

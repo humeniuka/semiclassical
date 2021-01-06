@@ -69,6 +69,9 @@ class TestCoherentStates(unittest.TestCase):
     check overlap integrals between multidimension coherent states
     """
     def test_normalization(self):
+        # make random numbers reproducible
+        torch.manual_seed(0)
+        
         n = 5
         # draw random numbers for positive definite, symmetric n x n matrix of width parameters
         Gi = 5.0 * 2.0*(torch.rand(n,n) - 0.5)
