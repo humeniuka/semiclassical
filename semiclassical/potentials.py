@@ -1,7 +1,8 @@
 # coding: utf-8
 """potential energy surfaces"""
 
-__all__ = ['NonHarmonicPotential', 'MorsePotential']
+__all__ = ['NonHarmonicPotential', 'MorsePotential',
+           'MolecularHarmonicPotential', 'MolecularGDMLPotential']
 
 
 # # Imports
@@ -387,8 +388,141 @@ class MorsePotential(object):
         tau2 = torch.zeros_like(r)
         return tau2
 
+# for mixing in some methods specifically for molecules 
+class _MolecularPotentialBase(object):
+    _masses, _dim = None, None
+    def dimensions(self):
+        """
+        number of nuclear degrees of freedom
+        
+        Returns
+        -------
+        dim     :   int
+        """
+        return self._dim
 
-class MolecularGDMLPotential(object):
+    def masses(self):
+        """
+        masses (in multiples of electron mass) for each degree of freedom
+        
+        Returns
+        -------
+        masses  :  real Tensor (dim,)
+        """
+        return self._masses
+
+class MolecularHarmonicPotential(_MolecularPotentialBase, object):
+    """
+    harmonic expansion around a reference geometry (usually minimum):
+
+      V(r') = V0(r) + [grad V0]^T . (r'-r) + 1/2 (r'-r)^T [hess V0] (r'-r)
+
+    Parameters
+    ----------
+    freq_fchk  :  FormattedCheckpointFile
+      formatted checkpoint file object with cartesian geometry, gradient
+      and cartesian force constants (from a frequency calculation at the
+      reference geometry).
+    nac_fchk   :  FormattedCheckpointFile
+      formatted checkpoint file object with cartesian non-adiabatic coupling vector
+    """
+    def __init__(self, freq_fchk, nac_fchk):
+        self.pos0, self.energy0, self.grad0, self.hess0 = (torch.from_numpy(x)
+                                                           for x in
+                                                           freq_fchk.harmonic_approximation())
+        self.nac0 = torch.from_numpy(nac_fchk.nonadiabatic_coupling())
+        self._masses = torch.from_numpy(freq_fchk.masses())
+        self._dim = len(self._masses)
+                
+    def harmonic_approximation(self, r):
+        """
+        local harmonic approximation to the potential energy surface around a point r:
+
+           V(r') = V(r) + [grad V(r)]^T . (r'-r) + 1/2 (r'-r)^T . [hess V(r)] . (r'-r)
+
+        This function computes the energies, gradients and Hessians for a batch of geometries.
+
+        Parameters
+        ----------
+        r  :  real Tensor (dim,n)
+          batch of position vectors
+
+        Returns
+        -------
+        vpot  :  real Tensor (n,)
+          potential energies
+        grad  :  real Tensor (dim,n)
+          batch of gradient vectors
+        hess  :  real Tensor (dim,dim,n)
+          batch of Hessian matrices
+        """
+        if (self.energy0.device != r.device):
+            self.energy0.to(r.device)
+            self.pos0.to(r.device)
+            self.grad0.to(r.device)
+            self.hess0.to(r.device)
+
+        dim,n = r.size()
+        # r'-r
+        dr = r - self.pos0.unsqueeze(1).expand_as(r)
+
+        # expand around new point r'
+        vpot = (  self.energy0
+                + torch.einsum('in,i->n', dr, self.grad0)
+                + 0.5 * torch.einsum('in,ij,jn->n', dr, self.hess0, dr) )
+        grad = (  self.grad0.unsqueeze(1).expand_as(r)
+                + torch.einsum('ij,jn->in', self.hess0, dr))
+        hess = self.hess0.unsqueeze(2).expand(-1,-1,n)
+        
+        return vpot, grad, hess
+
+    def derivative_coupling_1st(self, r):
+        """
+        first order derivative non-adiabatic coupling
+        
+               (1)           d
+            tau   = <ground|----- excited>        k=1,...,d
+               k            dx(k)
+               
+        Parameters
+        ----------
+        r  :  real Tensor (d,*)
+          nuclear coordinates
+        
+        Returns
+        -------
+        tau1  :  real Tensor (d,*)
+          derivative coupling vector tau1(r)
+        """
+        if (self.nac0.device != r.device):
+            self.nac0.to(r.device)
+
+        tau1 = self.nac0.unsqueeze(1).expand_as(r)
+        return tau1
+    
+    def derivative_coupling_2nd(self, r):
+        """
+        second order derivative non-adiabatic coupling
+          
+               (2)           d^2
+            tau   = <ground|------- excited>       k=1,...,d
+               k            dx(k)^2
+        
+        Parameters
+        ----------
+        r  :  real Tensor (d,*)
+          nuclear coordinates
+        
+        Returns
+        -------
+        tau2  :  real Tensor (d,*)
+          2nd order derivative coupling tau2(r)   
+        """
+        tau2 = torch.zeros_like(r)
+        return tau2
+        
+    
+class MolecularGDMLPotential(_MolecularPotentialBase, object):
     """
     machine-learned molecular potential (symmetric gradient-domain ML, sGDML)
 
@@ -411,26 +545,6 @@ class MolecularGDMLPotential(object):
         self._masses = (torch.tensor([atomic_masses[z]*units.amu_to_aumass for z in model_pot['z']])
                         .repeat(3))
         self._dim = len(self._masses)
-        
-    def dimensions(self):
-        """
-        number of nuclear degrees of freedom
-        
-        Returns
-        -------
-        dim     :   int
-        """
-        return self._dim
-
-    def masses(self):
-        """
-        masses (in multiples of electron mass) for each degree of freedom
-        
-        Returns
-        -------
-        masses  :  real Tensor (dim,)
-        """
-        return self._masses
         
     def harmonic_approximation(self, r):
         """
@@ -457,9 +571,12 @@ class MolecularGDMLPotential(object):
         if (self.gdml_pot.device != r.device):
             self.gdml_pot.to(r.device)
 
-        vpot, grad, hess = self.gdml_pot.forward(r)
+        # GDMLPredict expects the first axis to be the batch dimension,
+        # while in the propagators the last dimension is the batch dimension,
+        # so we have to change the order of the axes.
+        vpot, grad, hess = self.gdml_pot.forward(r.permute(1,0))
         
-        return vpot, grad, hess
+        return vpot, grad.permute(1,0), hess.permute(1,2,0)
 
     def derivative_coupling_1st(self, r):
         """
@@ -482,8 +599,12 @@ class MolecularGDMLPotential(object):
         if (self.gdml_nac.device != r.device):
             self.gdml_nac.to(r.device)
 
-        tau1 = self.gdml_nac.forward(r)[1]
-        return tau1
+        # GDMLPredict expects the first axis to be the batch dimension,
+        # while in the propagators the last dimension is the batch dimension,
+        # so we have to change the order of the axes.
+        tau1 = self.gdml_nac.forward(r.permute(1,0))[1]
+        
+        return tau1.permute(1,0)
     
     def derivative_coupling_2nd(self, r):
         """

@@ -118,6 +118,7 @@ class GDMLPredict(nn.Module):
             order=0       -     energy
             order=1       -    (energy, grad)
             order=2       -    (energy, grad, hess)
+
         """
         # dimensions
         #  B: batch size, number of molecular for which predictions should be made

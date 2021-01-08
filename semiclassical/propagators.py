@@ -482,14 +482,14 @@ class HermanKlukPropagator(object):
             #
             # Strictly speaking, the normalization constant should contain the factor
             # 1/(2 pi)^dact instead of 1/(2 pi)^d, since the distribution is for a reduce space
-            # with dact dimensions. In all experssions of the form
+            # with dact dimensions. In all expressions of the form
             #    /   dq dp
             #    | ------------- .....
             #    / (2 pi hbar)^d
             # where one sums over initial values, the number of dimensions d should be replaced
             # by the number of active dimensions, dact.
             # Since the factors in the normalization and the volume element cancel in the end,
-            # we leave the expression a 1/(2 pi)^d.
+            # we leave the expression as 1/(2 pi)^d.
             # 
             norm_fac = 1.0/((2*np.pi)**d * torch.sqrt(torch.det(cov)))
             # mean (q0,p0)
@@ -592,6 +592,13 @@ class HermanKlukPropagator(object):
         # semiclassical prefactor
         self.c = torch.ones(n, dtype=torch.complex128).to(device)
 
+        # for overlaps and wavefunctions
+        self.csoi0 = CoherentStatesOverlap(self.Gamma_i, self.Gamma_0)
+        self.csot0 = CoherentStatesOverlap(self.Gamma_t, self.Gamma_0)
+        self.csott = CoherentStatesOverlap(self.Gamma_t, self.Gamma_t)
+
+        self.csw = CoherentStatesWavefunction(self.Gamma_t)
+        
         # time in a.u.
         self.t = 0.0
         
@@ -629,9 +636,8 @@ class HermanKlukPropagator(object):
         
         # overlap of the initial wavefunction with initial coherent states 
         # <qi,pi|phi(0)>
-        csoi0 = CoherentStatesOverlap(self.Gamma_i, self.Gamma_0)
         qi,pi = self.initial_positions_and_momenta()
-        v0 = csoi0(qi,pi, self.q0,self.p0).squeeze()
+        v0 = self.csoi0(qi,pi, self.q0,self.p0).squeeze()
         
         # expansion coefficients of wavefunction in the basis of gaussian wavepackets
         # v_i = C(qi,pi,t)*e^{i*S/hbar} / (2 pi hbar)^d * <qi,pi|phi(0)>
@@ -678,14 +684,12 @@ class HermanKlukPropagator(object):
         q,p = self.current_positions_and_momenta()
         v = self.coefficients()
         
-        csw = CoherentStatesWavefunction(self.Gamma_t)
-            
         phi = torch.zeros(nx, dtype=torch.complex128).to(self.device)
         nchunk = nx // 100 + 1
         # Split the spatial grid into chunks and compute the wavefunction on each chunk.
         for x_,phi_ in zip(torch.chunk(x,nchunk,dim=1), 
                            torch.chunk(phi,nchunk,dim=0)):
-            phi_[:] = csw(q,p,v,x_)
+            phi_[:] = self.csw(q,p,v,x_)
             
         return phi.detach().cpu().numpy()
     
@@ -718,7 +722,6 @@ class HermanKlukPropagator(object):
         # out of memory. The vector of coefficients is also split into chunks and the norm is obtained
         # by accumulating the terms v^T.O.v from all combinations of blocks.
         q,p = self.current_positions_and_momenta()
-        cso = CoherentStatesOverlap(self.Gamma_t, self.Gamma_t)
         norm2 = torch.tensor([0.0j]).to(self.device)
         # slip array of trajectories into `nchunk` chunks
         nchunk = self.ntraj // 1000 + 1
@@ -730,7 +733,7 @@ class HermanKlukPropagator(object):
                                 torch.chunk(v,nchunk,dim=0)):
                 # overlap between Gaussian wavepackets at different points in phase space
                 # olap[i,j] = <qi,pi|qj,pj>
-                olap_ij = cso(qi,pi, qj,pj)
+                olap_ij = self.csott(qi,pi, qj,pj)
                 # norm = sqrt( sum_{i,j} v[i]^* olap[i,j] * v[j] )
                 # contribution from blocks i and j to norm
                 norm2 += torch.einsum('i,ij,j', vi.conj(), olap_ij, vj)
@@ -750,15 +753,13 @@ class HermanKlukPropagator(object):
         
         # overlap of the initial wavefunction with initial coherent states 
         # <qi,pi|phi(0)>
-        csoi0 = CoherentStatesOverlap(self.Gamma_i, self.Gamma_0)
         qi,pi = self.initial_positions_and_momenta()
-        vi = csoi0(qi,pi, self.q0,self.p0).squeeze()
+        vi = self.csoi0(qi,pi, self.q0,self.p0).squeeze()
         
         # overlap of the initial wavefunction with coherent states at current time 
         # <qt,pt|phi(0)>
-        csot0 = CoherentStatesOverlap(self.Gamma_t, self.Gamma_0)
         qt,pt = self.current_positions_and_momenta()
-        vt = csot0(qt,pt, self.q0,self.p0).squeeze()
+        vt = self.csot0(qt,pt, self.q0,self.p0).squeeze()
         
         # contribution from individual trajectories to autocorrelation function
         #    (qp)

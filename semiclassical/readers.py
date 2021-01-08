@@ -179,6 +179,8 @@ class FormattedCheckpointFile(object):
             hess = np.zeros((3*nat,3*nat))
             row, col = np.tril_indices(3*nat)
             hess[row,col] = self.data["Cartesian Force Constants"]
+            # Hessian is symmetric, H^T = H
+            hess[col,row] = hess[row,col]
         except KeyError as err:
             logger.error(f"A required field could not be found in formatted checkpoint file {self.filename} .")
             raise err
@@ -214,4 +216,13 @@ class FormattedCheckpointFile(object):
         mass = self.data["Real atomic weights"] * units.amu_to_aumass
         mass = np.repeat(mass, 3)
         return mass
+    def atomic_numbers(self):
+        """
+        atomic numbers 
 
+        Returns
+        -------
+        numbers :  ndarray(3*nat,)
+          atomic numbers for each 
+        """
+        return self.data["Atomic numbers"]
