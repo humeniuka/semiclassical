@@ -12,10 +12,10 @@ import os.path
 # # Local Imports
 from semiclassical.propagators import HermanKlukPropagator, WaltonManolopoulosPropagator
 from semiclassical.potentials import MorsePotential
-from semiclassical.propagators import hbar
 from semiclassical.broadening import gaussian
 from semiclassical.rates import internal_conversion_rate
 from semiclassical import units
+from semiclassical.units import hbar
 
 # # Logging
 logger = logging.getLogger(__name__)

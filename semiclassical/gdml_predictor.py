@@ -84,6 +84,15 @@ class GDMLPredict(nn.Module):
         self.perm_idxs = perm_idxs
         self.n_perms = n_perms
 
+    @property
+    def device(self):
+        """
+        device (gpu or cuda) where the GDML model lives on
+        """
+        # nn.Module does not have a .device attribute, so we take the value
+        # from one of the tensors.
+        return self._xs_train.device
+        
     def forward(self, r, order=2):
         """
         Predict 

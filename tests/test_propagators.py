@@ -26,12 +26,12 @@ else:
     device = torch.device('cpu')
 
 # # Local Imports
-from semiclassical.propagators import _sym_sqrtm, _is_symmetric_positive
+from semiclassical.propagators import _sym_sqrtm, _is_symmetric_non_negative
 from semiclassical.propagators import HermanKlukPropagator, WaltonManolopoulosPropagator
 from semiclassical.potentials import NonHarmonicPotential, MorsePotential
-from semiclassical.propagators import hbar
 from semiclassical.propagators import CoherentStatesOverlap
 from semiclassical import units
+from semiclassical.units import hbar
 
 # make random numbers reproducible
 torch.manual_seed(0)
@@ -46,10 +46,12 @@ class TestLinearAlgebra(unittest.TestCase):
 
         # reference implementation of scipy
         sqA_scipy = sla.sqrtm(A.numpy())
+        isqA_scipy = sla.inv(sla.sqrtm(A.numpy()))
         # my own implementation using pure torch functions
-        sqA = _sym_sqrtm(A).numpy()
+        sqA,isqA = (x.numpy() for x in _sym_sqrtm(A))
         
         self.assertTrue(np.isclose(sqA, sqA_scipy).all())
+        self.assertTrue(np.isclose(isqA, isqA_scipy).all())
     def test_is_symmetric_positive(self):
         # create random symmetric, positive definite n x n  matrix
         n = 5
@@ -58,10 +60,10 @@ class TestLinearAlgebra(unittest.TestCase):
         # eigenvectors
         V = 5.0 * 2.0*(torch.rand(n,n) - 0.5)
         A = V @ torch.diag(e) @ V.T
-        self.assertTrue(_is_symmetric_positive(A))
+        self.assertTrue(_is_symmetric_non_negative(A))
         # make A non-symmetric
         A[0,1] = A[0,1] + 0.5
-        self.assertFalse(_is_symmetric_positive(A))
+        self.assertFalse(_is_symmetric_non_negative(A))
         
         
 class TestCoherentStates(unittest.TestCase):
@@ -481,7 +483,6 @@ class TestAdiabaticShiftModel(unittest.TestCase):
         # test anharmonic AS model with 5 modes
         self._load_AS_model(num_modes=5, anharmonicity=0.02)
         self._run_semiclassical_dynamics(propagator_name="WM", ntraj=50000)
-        
         
 if __name__ == "__main__":
     unittest.main()

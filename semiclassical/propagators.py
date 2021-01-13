@@ -1,7 +1,7 @@
 # coding: utf-8
 """semiclassical propagators"""
 
-__all__ = ['HermanKlukPropagator', 'WaltonManolopoulosPropagator', 'hbar']
+__all__ = ['HermanKlukPropagator', 'WaltonManolopoulosPropagator']
 
 
 # # Imports
@@ -11,11 +11,11 @@ from torch.distributions.multivariate_normal import MultivariateNormal
 import numpy as np   # defines np.pi
 import logging
 
-# Atomic units are used throughout
-#  hbar = h/(2pi) = 1
-#  mass_electron = 1
-hbar = 1.0
+# # Local Imports
+from semiclassical.units import hbar
 
+# small float, threshold for considering singular values as 0
+ZERO = 1.0e-8
 
 # # Logging
 logger = logging.getLogger(__name__)
@@ -26,21 +26,26 @@ logging.basicConfig(format="[%(module)-12s] %(message)s", level=logging.INFO)
 
 def _sym_sqrtm(A):
     """
-    square root of symmetric real matrix, A^{1/2}
+    square root of symmetric real matrix and its pseudoinverse, A^{1/2} and A+^{-1/2}
     
     Parameters
     ----------
     A    :  real Tensor (n,n)
        n x n matrix
-    
+
     Returns
     -------
-    sqA  :  complex Tensor (n,n)
-       square root of A, such that sqA.sqA = A
+    sqA      :  complex Tensor (n,n)
+       A^{1/2}, the square root of A
+    sqA_pinv :  complex Tensor (n,n)
+       A^{-1/2}, the pseudo inverse of A^{1/2}
     """
     # eigenvalue decomposition of symmetric A
     #  A = V.diag(e).V^{T}
     e, V = torch.symeig(A, eigenvectors=True)
+    # non-zero eigenvalues
+    non_zero = abs(e) > ZERO
+
     # In order to be able to compute the square roots of negative
     # numbers, we have to cast e and V to complex type.
     e = e.type(torch.complex128)
@@ -49,12 +54,15 @@ def _sym_sqrtm(A):
     # from the basis of eigenvectors
     # A^{1/2} = V.diag(sqrt(e)).V^{T}
     sqA = torch.einsum('ij,j,kj->ik', V, torch.sqrt(e), V)
-    
-    return sqA
 
-def _is_symmetric_positive(A, eps=1.0e-6):
+    # pseudo inverse A^{-1/2}, only non-zero eigenvalues are included
+    sqA_pinv = torch.einsum('ij,j,kj->ik', V[:,non_zero], 1.0/torch.sqrt(e[non_zero]), V[:,non_zero])
+    
+    return sqA, sqA_pinv
+
+def _is_symmetric_non_negative(A, eps=1.0e-6):
     """
-    check if a matrix A is symmetric (A = A^T) and positive definite (x^T.A.x > 0 for all x)
+    check if a matrix A is symmetric (A = A^T) and positive semi-definite (x^T.A.x >= 0 for all x)
 
     Parameters
     ----------
@@ -72,8 +80,8 @@ def _is_symmetric_positive(A, eps=1.0e-6):
     # eigenvalue decomposition of symmetric A
     #  A = V.diag(e).V^{T}
     e, V = torch.symeig(A, eigenvectors=True)
-    # A is positive definite if all eigenvalues are positive.
-    return (e > 0.0).all()
+    # A is positive semi-definite if all eigenvalues are non-negative.
+    return (e >= -ZERO).all()
 
 # # Fourth-Order Runge-Kutta Integrator
 
@@ -137,24 +145,31 @@ class CoherentStatesOverlap(object):
           width matrix of ket coherent states
         """
         assert Gi.size() == Gj.size(), "width matrices Gi and Gj have to have the same shape"
-        self.Gi = Gi
-        self.Gj = Gj
-        
-        self.detGi = torch.det(Gi)
-        self.detGj = torch.det(Gj)
+
+        ei, Vi = torch.symeig(Gi, eigenvectors=True)
+        ej, Vj = torch.symeig(Gj, eigenvectors=True)
+
+        self.detGi = torch.prod(ei[abs(ei) > ZERO]) # torch.det(Gi)
+        self.detGj = torch.prod(ej[abs(ej) > ZERO]) # torch.det(Gj)
         
         self.Gij = Gi+Gj
-        self.iGij = torch.inverse(self.Gij)
-        self.detGij = torch.det(self.Gij)
+        # eigenvalue decomposition
+        eij, Vij = torch.symeig(self.Gij, eigenvectors=True)
+        non_zero = abs(eij) > ZERO
+
+        # self.iGij = torch.inverse(self.Gij)
+        self.iGij = torch.einsum('ij,j,kj->ik', Vij[:,non_zero], 1.0/eij[non_zero], Vij[:,non_zero])
+        # self.detGij = torch.det(self.Gij)
+        self.detGij = torch.prod(eij[non_zero])
         
         #             -1
         # Gi . [Gi+Gj]  . Gj
-        self.Gi_iGij_Gj = self.Gi @ self.iGij @ self.Gj
+        self.Gi_iGij_Gj = Gi @ self.iGij @ Gj
         #             -1
         # Gj . [Gi+Gj]
-        self.Gj_iGij = self.Gj @ self.iGij
+        self.Gj_iGij = Gj @ self.iGij
         
-        self.dim = self.Gi.size()[0]
+        self.dim = Gi.size()[0]
 
     def __call__(self,qi,pi, qj,pj):
         """
@@ -205,7 +220,7 @@ class CoherentStatesOverlap(object):
         qj, pj = qj.unsqueeze(1).expand(-1,ni,-1), pj.unsqueeze(1).expand(-1,ni,-1)
         
         # prefactor from normalization
-        fac = torch.sqrt(2**d * torch.sqrt(self.detGi*self.detGj) / self.detGij)
+        fac = torch.sqrt(2.0**d * torch.sqrt(self.detGi*self.detGj) / self.detGij)
         
         olap = fac * torch.exp(
             -0.5         * torch.einsum('aij,ab,bij->ij', qj-qi, self.Gi_iGij_Gj, qj-qi)
@@ -221,7 +236,10 @@ class CoherentStatesOverlap(object):
 class CoherentStatesWavefunction(object):
     def __init__(self, G):
         self.G = G
-        self.detG = torch.det(G)
+        # self.detG = torch.det(G)
+        e, V = torch.symeig(G, eigenvectors=True)
+        self.detG = torch.prod(e[abs(e) > ZERO])
+        
     def __call__(self, q,p,v, x):
         """
         evaluates a wavefunction consisting of a linear combination of coherent
@@ -374,10 +392,10 @@ class HermanKlukPropagator(object):
 
         Notes
         -----
-        Gamma_i and Gamma_t should be positive definite matrices.
+        Gamma_i and Gamma_t should be positive semi-definite matrices.
         """
-        assert _is_symmetric_positive(Gamma_i), "Gamma_i has to be symmetric and positive definite."
-        assert _is_symmetric_positive(Gamma_t), "Gamma_t has to be symmetric and positive definite."
+        assert _is_symmetric_non_negative(Gamma_i), "Gamma_i has to be symmetric and positive semi-definite."
+        assert _is_symmetric_non_negative(Gamma_t), "Gamma_t has to be symmetric and positive semi-definite."
         # default device
         self.device = device
         # move input tensors to device
@@ -387,16 +405,12 @@ class HermanKlukPropagator(object):
         # width parameters of coherent states
         self.Gamma_i = Gamma_i
         self.Gamma_t = Gamma_t
-        # \Gamma_i^{1/2}
-        self.sqGi = _sym_sqrtm(Gamma_i)
-        # \Gamma_t^{1/2}
-        self.sqGt = _sym_sqrtm(Gamma_t)
-        # \Gamma_i^{-1/2}
-        self.isqGi = torch.inverse(self.sqGi)
-        # \Gamma_t^{-1/2}
-        self.isqGt = torch.inverse(self.sqGt)
+        # \Gamma_i^{1/2} and \Gamma_i^{-1/2}
+        self.sqGi, self.isqGi = _sym_sqrtm(Gamma_i)
+        # \Gamma_t^{1/2} and \Gamma_t^{-1/2}
+        self.sqGt, self.isqGt = _sym_sqrtm(Gamma_t)
         
-    def initial_conditions(self, q0, p0, Gamma_0, ntraj=5000, active_modes=None):
+    def initial_conditions(self, q0, p0, Gamma_0, ntraj=5000):
         """
         sample initial positions qi and momenta pi from the normalized probability distribution
         
@@ -423,14 +437,9 @@ class HermanKlukPropagator(object):
         --------
         ntraj        :  int
           number of trajectories for which initial positions and momenta are sampled
-        active_modes :  int Tensor (< dim,)
-          indices of active degrees of freedom (0-based) or None to make all modes active.
-          During the sampling of initial conditions, inactive modes are clamped to the phase
-          space center of the wavepacket. Only the initial positions and momenta of active 
-          modes `i` differ from (q0[i],p0[i]).
         """
         assert Gamma_0.size() == self.Gamma_i.size(), "Width parameter matrix Gamma_0 has wrong dimensions."
-        assert _is_symmetric_positive(Gamma_0), "Gamma_0 has to be symmetric and positive definite."
+        assert _is_symmetric_non_negative(Gamma_0), "Gamma_0 has to be symmetric and positive semi-definite."
         # abbreviations
         n = ntraj
         d = q0.size()[0]
@@ -441,106 +450,88 @@ class HermanKlukPropagator(object):
         
         G0 = Gamma_0
         Gi = self.Gamma_i
-        Gi0 = Gi+G0
-        iGi0 = torch.inverse(Gi0)
-        # covariance matrices for q and p
-        #              -1      -1
-        # ( G . [Gi+G0]  . G  )
-        #   i              0
-        cov_q = torch.inverse( Gi @ iGi0 @ G0 )
+
+        Gi0 = G0 + Gi
+        # find pseudo inverse of Gi0
+        wp,Vp = torch.symeig(Gi0, eigenvectors=True)
+        non_zero_p = wp > ZERO
+        iGi0 = torch.einsum('ij,j,kj->ik', Vp[:,non_zero_p], 1.0/wp[non_zero_p], Vp[:,non_zero_p])
+    
+        # [Gi+G0]^{-1} can also be expressed as Lp.Lp^T
+        #Lp = torch.einsum('ij,j->ij', Vp[:,non_zero_p], 1.0/torch.sqrt(wp[non_zero_p]))
+        # pseudoinverse Lp^{-1}
+        iLp = torch.einsum('i,ji->ij', torch.sqrt(wp[non_zero_p]), Vp[:,non_zero_p])
+    
+        # form Gi [Gi+G0]^{-1} G0 and diagonalize
+        wq,Vq = torch.symeig(Gi @ iGi0 @ G0, eigenvectors=True)
+        non_zero_q = wq > ZERO
+
+        # Gi [Gi+G0]^{-1} G0 can be expressed as Lq.Lq^T
+        #Lq = torch.einsum('ij,j->ij', Vq[:,non_zero_q], torch.sqrt(wq[non_zero_q]))
+        # pseudoinverse Lq^{-1}
+        iLq = torch.einsum('i,ji->ij', 1.0/torch.sqrt(wq[non_zero_q]), Vq[:,non_zero_q])
+
+        assert torch.count_nonzero(wp > ZERO) == torch.count_nonzero(wq > ZERO), "number of non-zero modes for sampling of positions and momenta have to be the same"
+        num_non_zero = torch.count_nonzero(wp > ZERO)
+    
+        # center in phase space
+        z0 = torch.cat((q0,p0))
+        
+        # The inverse of the singular covariance matrix is expressed as
+        #  cov^{-1} = Lz . Lz^T
+        #  cov      = Lz^{-1}^T . Lz^{-1}
+        #Lz = torch.block_diag(Lq, Lp)
+        # pseudoinverse Lz^{-1}
+        iLz = torch.block_diag(iLq, iLp)
+        # pseudo determinant of Lz
+        # det(Lz) = det(Lq) det(Lp) = product of ratios of non-zero eigenvalues of Lq and Lp
+        detLz = torch.prod(torch.sqrt(wq[non_zero_q]/ wp[non_zero_p]))
+
+        # x = Lz^T . (z - z0)
+        # sample from standard normal distribution ~ exp(-1/2 x^T x)
+        distribution = MultivariateNormal(torch.zeros(2*num_non_zero).double(),    # center
+                                          torch.eye(2*num_non_zero).double()  )    # covariance
+        
+        # sample initial positions and momenta from normal distribution
+        xi = distribution.sample((ntraj,)).T
+        
+        # transform back to zi = z0 + (Lz^{-1})^T . xi
+        zi = z0.unsqueeze(1) + torch.einsum('ji,jn->in', iLz, xi)
+
+        qi,pi = torch.split(zi,[d,d])
+
+        # The wavefunction obtained as a superposition of frozen
+        # Gaussians has to be divided by the normalization constant `probi`.
+        # The wavefunction is assembled by Monte Carlo integration over the initial values.
+        # The normalization constants are the probabilities for sampling each of the initial
+        # values.
         #
-        # hbar^2 [Gi+G0]
-        cov_p = hbar**2 * Gi0
+        # Strictly speaking, the normalization constant should contain the factor
+        # 1/(2 pi)^num_non_zero instead of 1/(2 pi)^dim, since the distribution is for a reduce space
+        # with num_non_zero < dim dimensions. In all expressions of the form
+        #    /   dq dp
+        #    | ------------- .....
+        #    / (2 pi hbar)^dim
+        # where one sums over initial values, the number of dimensions dim should be replaced
+        # by non_num_zero, the number of dimensions which have non-zero normal mode frequencies.
+        # Since the factors in the normalization and the volume element cancel in the end,
+        # we leave the expression as 1/(2 pi)^dim.
+        #
 
-        if not active_modes is None:
-            assert (self.Gamma_i == self.Gamma_t).all() and (self.Gamma_i == Gamma_0).all(), \
-                "When using active modes all width parameter matrices should be equal to Gamma_0 of the initial wavepacket."
-
-            logger.info(f"number of active dimensions      : {len(active_modes)}")
-            logger.info(f"indices of active modes (0-based): {active_modes}")
-            # number of active dimensions
-            dact = len(active_modes)
-            # indices of active and inactive modes
-            active = torch.zeros(d, dtype=bool)
-            active[active_modes] = True
-            inactive = torch.logical_not(active)
-            # covariance matrix for active degrees of freedom
-            cov = torch.block_diag(cov_q[active,:][:,active], cov_p[active,:][:,active])
-            # center in phase space loc = (q0,p0)
-            loc = torch.cat((q0[active], p0[active]))
-            distribution = MultivariateNormal(loc, cov)
+        # det(Lz) comes from variable transformation x = L^T . (z-z0)
+        #  P(x) dx = P(x) det(L) dz    =>   P(z) = det(L) P(x) 
+        norm_fac = detLz/(2*np.pi)**d
+        # P(qi,pi) probability of sampling (qi,pi)
+        probi = norm_fac * torch.exp(-0.5 * torch.einsum('in,in->n', xi,xi))
         
-            # sample initial positions and momenta from normal distribution
-            # zi contains only the active degrees of freedom
-            zi = distribution.sample((ntraj,)).T
-            
-            # normalization constant, the wavefunction obtained as a superposition of frozen
-            # Gaussians has to be divided by the normalization constant `probi`.
-            # The wavefunction is assembled by Monte Carlo integration over the initial values.
-            # The normalization constants are the probabilities for sampling each of the initial
-            # values.
-            #
-            # Strictly speaking, the normalization constant should contain the factor
-            # 1/(2 pi)^dact instead of 1/(2 pi)^d, since the distribution is for a reduce space
-            # with dact dimensions. In all expressions of the form
-            #    /   dq dp
-            #    | ------------- .....
-            #    / (2 pi hbar)^d
-            # where one sums over initial values, the number of dimensions d should be replaced
-            # by the number of active dimensions, dact.
-            # Since the factors in the normalization and the volume element cancel in the end,
-            # we leave the expression as 1/(2 pi)^d.
-            # 
-            norm_fac = 1.0/((2*np.pi)**d * torch.sqrt(torch.det(cov)))
-            # mean (q0,p0)
-            mu = loc.unsqueeze(1).expand_as(zi)
-            # P(qi,pi) probability of sampling (qi,pi)
-            probi = norm_fac * torch.exp(-0.5 * torch.einsum('in,ij,jn->n', zi-mu, torch.inverse(cov), zi-mu))
-
-            qi_active,pi_active = torch.split(zi,[dact,dact])
-            qi,pi = torch.zeros((d,ntraj)).to(device), torch.zeros((d,ntraj)).to(device)
-            # randomly distributed samples around (q0,p0) for active dimensions
-            qi[active,:] = qi_active
-            pi[active,:] = pi_active
-            # centers of distribution (q0,p0) for inactive dimensions
-            qi[inactive,:] = q0[inactive].unsqueeze(1).expand(-1,ntraj)
-            pi[inactive,:] = p0[inactive].unsqueeze(1).expand(-1,ntraj)
-
-            # update zi with initial phase space positions in all dimensions
-            zi = torch.cat((qi,pi), 0)
-
-        else:
-            # all dimensions are active
-            
-            # covariance matrix
-            cov = torch.block_diag(cov_q, cov_p)
-            # center in phase space loc = (q0,p0)
-            loc = torch.cat((q0, p0))
-            distribution = MultivariateNormal(loc, cov)
-        
-            # sample initial positions and momenta from normal distribution
-            zi = distribution.sample((ntraj,)).T
-            qi,pi = torch.split(zi,[d,d])
-
-            # normalization constant, the wavefunction obtained as a superposition of frozen
-            # Gaussians has to be divided by the normalization constant.
-            # The wavefunction is assembled by Monte Carlo integration over the initial values.
-            # The normalization constants are the probabilities for sampling each of the initial
-            # values.
-            norm_fac = 1.0/((2*np.pi)**d * torch.sqrt(torch.det(cov)))
-            # mean (q0,p0)
-            mu = loc.unsqueeze(1).expand_as(zi)
-            # P(qi,pi) probability of sampling (qi,pi)
-            probi = norm_fac * torch.exp(-0.5 * torch.einsum('in,ij,jn->n', zi-mu, torch.inverse(cov), zi-mu))
-
         # compare expected center and covariance of normal distribution with
         # mean and standard deviation of samples
         logger.info("== Initial Conditions ==")
         logger.info(f"number of dimensions   :  {d}")
+        logger.info(f"zero dimensions        :  {d-num_non_zero}")
         logger.info(f"number of trajectories :  {n}")
-        logger.info(f"For active dimensions the standard deviation should be zero.")
-        logger.info(f"cov(q)= {torch.diag(cov_q)} \t std(q)^2= {torch.std(qi,1)**2}")
-        logger.info(f"cov(p)= {torch.diag(cov_p)} \t std(p)^2= {torch.std(pi,1)**2}")
+        logger.info(f"cov(q)= {torch.diag(iLq.T @ iLq)} \t std(q)^2= {torch.std(qi,1)**2}")
+        logger.info(f"cov(p)= {torch.diag(iLp.T @ iLp)} \t std(p)^2= {torch.std(pi,1)**2}")
         logger.info(f"q0= {q0} \t <q>= {torch.mean(qi,1)}  ")
         logger.info(f"p0= {p0} \t <p>= {torch.mean(pi,1)}  ")
         logger.info("")
@@ -577,10 +568,17 @@ class HermanKlukPropagator(object):
         self.q0 = q0
         self.p0 = p0
         self.Gamma_0 = Gamma_0
-        self.iGamma_0 = torch.inverse(Gamma_0)
-        #
-        self.detGi0 = torch.det(Gi0)
-        self.iGi0 = torch.inverse(Gi0)
+
+        # TODO: The following quantities are only needed by the Walton-Manolopoulos propagator
+        # and should be moved into that class. 
+        # pseudo-inverse of Gamma_0
+        w0,V0 = torch.symeig(Gamma_0, eigenvectors=True)
+        non_zero_0 = w0 > ZERO
+        # self.iGamma_0 = torch.inverse(Gamma_0)
+        self.iGamma_0 = torch.einsum('ij,j,kj->ik', V0[:,non_zero_0], 1.0/w0[non_zero_0], V0[:,non_zero_0])
+        self.detGi0 = torch.prod(wp[wp > ZERO])
+        self.iGi0 = iGi0
+        
         # number of trajectories
         self.ntraj = ntraj
         # initial positions and momenta zi = (qi,pi)
@@ -755,12 +753,12 @@ class HermanKlukPropagator(object):
         # <qi,pi|phi(0)>
         qi,pi = self.initial_positions_and_momenta()
         vi = self.csoi0(qi,pi, self.q0,self.p0).squeeze()
-        
+
         # overlap of the initial wavefunction with coherent states at current time 
         # <qt,pt|phi(0)>
         qt,pt = self.current_positions_and_momenta()
         vt = self.csot0(qt,pt, self.q0,self.p0).squeeze()
-        
+
         # contribution from individual trajectories to autocorrelation function
         #    (qp)
         #  C      = <phi(0)|qt,pt> C(qi,pi;t) * e^{i/hbar * S(qi,pi;t)} <qi,pi|phi(0)

@@ -18,7 +18,7 @@ print(device)
 
 from semiclassical.propagators import HermanKlukPropagator, WaltonManolopoulosPropagator
 from semiclassical.potentials import NonHarmonicPotential, MorsePotential
-from semiclassical.propagators import hbar
+from semiclassical.units import hbar
 
 # # Grids for Time Propagation
 
@@ -55,7 +55,7 @@ p0 = torch.tensor([0.0])
 Gamma_i = torch.tensor([[2*2.5]])
 Gamma_t = Gamma_i
 propagator_hk = HermanKlukPropagator(Gamma_i, Gamma_t)
-propagator_wm = WaltonManolopoulosPropagator(Gamma_i, Gamma_t, 100.0)
+propagator_wm = WaltonManolopoulosPropagator(Gamma_i, Gamma_t, 100.0, 100.0)
 
 Gamma_0 = torch.tensor([[omega]])
 propagator_hk.initial_conditions(q0, p0, Gamma_0, ntraj=500)

@@ -11,6 +11,7 @@ import logging
 from ase.data import atomic_masses
 
 # # Local Imports
+from semiclassical import units
 from semiclassical.gdml_predictor import GDMLPredict
 
 # # Logging
@@ -540,7 +541,7 @@ class MolecularGDMLPotential(_MolecularPotentialBase, object):
         self.gdml_pot = GDMLPredict(model_pot)
         self.gdml_nac = GDMLPredict(model_nac)
 
-        assert model_pot['z'] == model_nac['z'], "GDML models for potential energy and NAC vector should be for the same molecule."
+        assert (model_pot['z'] == model_nac['z']).all(), "GDML models for potential energy and NAC vector should be for the same molecule."
         # mass in atomic units for each cartesian coordinate
         self._masses = (torch.tensor([atomic_masses[z]*units.amu_to_aumass for z in model_pot['z']])
                         .repeat(3))

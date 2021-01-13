@@ -12,12 +12,14 @@ __all__ = ["FormattedCheckpointFile"]
 
 # # Imports
 import numpy as np
+import scipy.linalg as sla
 from collections import OrderedDict
 import re
 import logging
 
 # # Local Imports
 from semiclassical import units
+from semiclassical.units import hbar
 
 # # Logging
 logger = logging.getLogger(__name__)
@@ -160,7 +162,7 @@ class FormattedCheckpointFile(object):
         -------
         pos    :  ndarray (3*nat,)
           cartesian coordinates x0
-        energy :  float
+        energy :  ndarray (1,)
           total energy E(x0) of state of interest (in Hartree) 
         grad   :  ndarray (3*nat,)
           cartesian gradient dE/dx(x0)  (in Hartree/bohr)
@@ -170,7 +172,7 @@ class FormattedCheckpointFile(object):
         try:
             nat = self.data["Number of atoms"]
             # total energy of state of interest
-            energy = self.data["Total Energy"]
+            energy = np.array(self.data["Total Energy"])
             # geometry
             pos = self.data["Current cartesian coordinates"]
             # cartesian gradient
@@ -204,6 +206,68 @@ class FormattedCheckpointFile(object):
         if (nac == 0.0).all():
             logger.warning(f"All components of non-adiabatic coupling vector in {self.filename} are zero.")
         return nac
+    def vibrational_groundstate(self, zero_threshold=100.0):
+        """
+        The vibrational ground state belonging to the harmonic potential is given by
+
+                                          1/4                 T
+           psi (x) = (det(Gamma ) / pi^N)    exp{ -1/2 (x-x )  Gamma  (x-x ) }
+              0                0                           0        0     0
+
+        provided that x0 is the minimum. This function computes the width parameter matrix
+        Gamma_0 from the Hessian at the minimum.
+
+        Optional
+        --------
+        zero_threshold   :  float > 0
+          threshold for considering normal mode frequencies as zero (in cm-1)
+
+        Returns
+        -------
+        x0      : ndarray (3*nat,)
+          center of Gaussian, in cartesian coordinates (bohr)
+        Gamma0  : ndarray (3*nat,3*nat)
+          symmetric, positive semi-definite matrix of width parameters (bohr^{-2})
+        en_zpt  : float
+          zero-point energy (Hartree)
+        """
+        x0, energy, grad, hess = self.harmonic_approximation()
+        mass = self.masses()
+        # diagonals of M^{1/2} and M^{-1/2}
+        msq = np.sqrt(mass)
+        imsq = 1.0/msq
+        # mass-weighted Hessian H
+        hess_mwc = np.einsum('i,ij,j->ij', imsq, hess, imsq)
+        # diagonalize symmetric  H = V.diag(w).V^T
+        w2,V = sla.eigh(hess_mwc)
+
+        # vibrational energies
+        w = np.sqrt(w2)
+        # zero-point energy
+        en_zpt = 0.5 * hbar * np.sum(w)
+        
+        logger.info("Normal mode frequencies (cm-1)")
+        logger.info(w*units.hartree_to_wavenumbers)
+
+        if not (w * units.hartree_to_wavenumbers > zero_threshold).all():
+            logger.warning("At a minimum all frequencies should be positive, found imaginary ones.")
+        
+        # select non-zero vibrational modes
+        non_zero = (w * units.hartree_to_wavenumbers) > zero_threshold
+        # number of non singular dimensions
+        num_non_zero = np.count_nonzero( non_zero )
+
+        dim = x0.shape[0]
+        logger.info(f"number of zero modes : {dim - num_non_zero}")
+
+        # L = hbar^{-1/2} M^{1/2} V w^{1/2}
+        L = hbar**(-1/2) * np.einsum('i,ij,j->ij', msq, V[:,non_zero], np.sqrt(w[non_zero]))
+
+        # Gamma_0 = L . L^T
+        Gamma_0 = np.einsum('ij,kj->ik', L, L)
+
+        return x0, Gamma_0, en_zpt
+        
     def masses(self):
         """
         atomic masses in a.u.
