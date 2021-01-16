@@ -77,19 +77,24 @@ def main():
     parser_plot = subparsers.add_parser(
         'plot',
         help="plot correlation functions from .npz files")
-    parser_plot.add_argument('correlation_files', type=str, metavar='correlation.npz', help='plot correlation functions from one or more npz-files', nargs='*')
+    parser_plot.add_argument('correlation_files', type=str, metavar='correlation.npz', help='plot correlation functions from one or more npz-files', nargs='+')
 
     args = parser.parse_args()
 
-    if args.command == 'dynamics':
-        with open(args.json_input) as f:
-            config = json.load(f)
+    try:
+        
+        if args.command == 'dynamics':
+            with open(args.json_input) as f:
+                config = json.load(f)
 
-        for task in config['semi']:
-            _run_semiclassical_dynamics(task)
+            for task in config['semi']:
+                _run_semiclassical_dynamics(task)
 
-    elif args.command == 'plot':
-        _plot_correlation_functions(args.correlation_files)
+        elif args.command == 'plot':
+            _plot_correlation_functions(args.correlation_files)
+            
+    except:
+        logging.exception("An error occurred, see traceback below")
         
 class ConfigurationError(Exception):
     pass
@@ -251,8 +256,21 @@ def _run_semiclassical_dynamics(task):
                  autocorrelation=autocorrelation,
                  ic_correlation=ic_correlation,
                  trajectories=0)
+    else:
+        # check that existing data is compatible compatible with this dynamics run
+        data = np.load(filename)
+        assert np.array_equal(data['times'], times.numpy()), \
+            f"Time steps in {filename} differ. Delete the old file or change the grid for time propagation."
+        assert data['propagator'] == propagator_name, \
+            f"Data produced with different propagators cannot be added."
 
         
+    # make random numbers reproducible if desired
+    seed = task.get('manual_seed', None)
+    if not seed is None:
+        torch.manual_seed(seed)
+
+    # run semiclassical dynamics 
     for repetition in range(0, num_repetitions):
         logger.info(f"*** Repetition {repetition+1} ***")
         if propagator_name == "WM":
@@ -291,11 +309,8 @@ def _run_semiclassical_dynamics(task):
         #
         autocorrelation = ( repetition*autocorrelation + autocorrelation_ ) / (repetition + 1.0)
         ic_correlation = ic_correlation_
-
-        data = np.load(filename)
-        assert (data['times'] == times.numpy()).all(), f"Time steps in {filename} differ. Delete the old file or change the grid for time propagation."
-        assert data['propagator'] == propagator_name, f"Data produced with different propagators cannot be added."
         
+        data = np.load(filename)        
         ntraj_old = data['trajectories']
         ntraj_new = num_samples
         ntraj_tot = ntraj_old + ntraj_new

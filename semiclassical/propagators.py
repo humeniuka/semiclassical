@@ -145,10 +145,17 @@ class CoherentStatesOverlap(object):
           width matrix of ket coherent states
         """
         assert Gi.size() == Gj.size(), "width matrices Gi and Gj have to have the same shape"
+        self.dim = Gi.size()[0]
 
         ei, Vi = torch.symeig(Gi, eigenvectors=True)
         ej, Vj = torch.symeig(Gj, eigenvectors=True)
-
+        # rank of Gamma matrices
+        ranki = torch.count_nonzero(abs(ei) > ZERO)
+        rankj = torch.count_nonzero(abs(ej) > ZERO)
+        # Having the same rank does not necessarily ensure that the matrices Gi and Gj
+        # span the same vector space. 
+        assert ranki == rankj, "Gi and Gj have to have the same rank and null space."
+        
         self.detGi = torch.prod(ei[abs(ei) > ZERO]) # torch.det(Gi)
         self.detGj = torch.prod(ej[abs(ej) > ZERO]) # torch.det(Gj)
         
@@ -168,8 +175,10 @@ class CoherentStatesOverlap(object):
         #             -1
         # Gj . [Gi+Gj]
         self.Gj_iGij = Gj @ self.iGij
-        
-        self.dim = Gi.size()[0]
+
+        # The rank of the Gamma matrix can be smaller than the number
+        # of dimensions if Gamma is singular.
+        self.rank = ranki
 
     def __call__(self,qi,pi, qj,pj):
         """
@@ -220,7 +229,7 @@ class CoherentStatesOverlap(object):
         qj, pj = qj.unsqueeze(1).expand(-1,ni,-1), pj.unsqueeze(1).expand(-1,ni,-1)
         
         # prefactor from normalization
-        fac = torch.sqrt(2.0**d * torch.sqrt(self.detGi*self.detGj) / self.detGij)
+        fac = torch.sqrt(2.0**self.rank * torch.sqrt(self.detGi*self.detGj) / self.detGij)
         
         olap = fac * torch.exp(
             -0.5         * torch.einsum('aij,ab,bij->ij', qj-qi, self.Gi_iGij_Gj, qj-qi)
@@ -239,6 +248,8 @@ class CoherentStatesWavefunction(object):
         # self.detG = torch.det(G)
         e, V = torch.symeig(G, eigenvectors=True)
         self.detG = torch.prod(e[abs(e) > ZERO])
+        # rank(G) can be smaller than the number of dimensions
+        self.rank = torch.count_nonzero(abs(e) > ZERO)
         
     def __call__(self, q,p,v, x):
         """
@@ -272,7 +283,7 @@ class CoherentStatesWavefunction(object):
         # v has shape (ntraj,)   --> (ntraj,nx_)
         v = v.unsqueeze(1).expand(-1,nx)
         # normalization factor
-        fac = (self.detG/np.pi**d)**0.25
+        fac = (self.detG/np.pi**self.rank)**0.25
         # evaluate coherent state wavefunctions of all trajectories <x|q(i),p(i)>
         # on the spatial grid --> shape(gaussians) = (ntraj,nx_)
         gaussians = fac * torch.exp(-0.5     * torch.einsum('inx,ij,jnx->nx',x-q,self.G,x-q)
@@ -455,6 +466,9 @@ class HermanKlukPropagator(object):
         # find pseudo inverse of Gi0
         wp,Vp = torch.symeig(Gi0, eigenvectors=True)
         non_zero_p = wp > ZERO
+        # store eigenvectors that span the non-zero subspace
+        self.U = Vp[:,non_zero_p].type(torch.complex128)
+        
         iGi0 = torch.einsum('ij,j,kj->ik', Vp[:,non_zero_p], 1.0/wp[non_zero_p], Vp[:,non_zero_p])
     
         # [Gi+G0]^{-1} can also be expressed as Lp.Lp^T
@@ -934,6 +948,14 @@ class HermanKlukPropagator(object):
                     #           t     pq    i
             +1j/hbar*torch.einsum('ai,ijn,jb->abn', isqGt, Mpq, isqGi)
         )
+
+        # If the matrices of width parameters Gamma_i and Gamma_t do not have full rank,
+        # then the determinant of the matrix `mat` vanishes. Therefore we have to transform
+        # M into the subspace complementary to the null space of Gamma_i and Gamma_t. It is
+        # assumed that Gamma_0, Gamma_i and Gamma_t span the same vector space.
+
+        # transform mat to non-zero subspace, M = U^T @ M @ U
+        mat = torch.einsum('ia,ijn,jb->abn', self.U, mat, self.U)
         
         # To compute the determinants for a batch of matrices, the matrices have to be stacked
         # along the 0-th dimension, i.e. the array has to have the shape (ntraj,d,d), not (d,d,ntraj)

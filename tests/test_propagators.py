@@ -85,6 +85,33 @@ class TestCoherentStates(unittest.TestCase):
         cso = CoherentStatesOverlap(Gi,Gi)
         olap = cso(qi,pi, qi,pi)
         self.assertEqual(olap.squeeze().item(), 1.0)
+    def test_zero_modes(self):
+        """overlaps when width parameter matrix Gamma is singular"""
+        # make random numbers reproducible
+        torch.manual_seed(0)
+        
+        n = 5
+        # draw random numbers for positive definite, symmetric n x n matrix of width parameters
+        Gi = 5.0 * 2.0*(torch.rand(n,n) - 0.5)
+        # symmetrize
+        Gi = 0.5*(Gi + Gi.T)
+        # random numbers for position and momentum
+        qi,pi = torch.rand(n,1), torch.rand(n,1)
+        qj,pj = qi,pi #torch.rand(n,1), torch.rand(n,1)
+        # check <qi,pi,Gi|qi,pi,Gi> = 1        
+        cso = CoherentStatesOverlap(Gi,Gi)
+        olap = cso(qi,pi, qj,pj)
+
+        # turn Gi into a singular matrix by embedding it into a larger space
+        Gi_ = torch.zeros((n+1,n+1))
+        Gi_[:n,:n] = Gi
+        qi_, pi_, qj_, pj_ = (torch.cat((x, torch.zeros(1,1)), 0) for x in (qi,pi,qj,pj))
+        # The zero dimension should have no effect on the overlaps
+        cso_ = CoherentStatesOverlap(Gi_,Gi_)
+        olap_ = cso_(qi_,pi_, qj_,pj_)
+
+        self.assertEqual(olap.squeeze().item(), olap_.squeeze().item())
+        
         
 class TestSemiclassicalPropagators1D(unittest.TestCase):
     """
