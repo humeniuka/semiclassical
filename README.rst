@@ -81,8 +81,7 @@ Structure of Input File
 ========
 Keywords
 ========
-
-
+    
 .. topic:: ``potential``
 
    | **Description:** Block defining the potential.
