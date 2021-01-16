@@ -76,7 +76,8 @@ Structure of Input File
 
 
 `title` determines the type of calculation. So far only correlation functions for
-"internal conversion" are implemented. This type of calculation requires the following keywords: 
+"internal conversion" are implemented. This type of calculation requires the keywords listed below.
+See also the examples for input files at the end.
 
 ========
 Keywords
@@ -94,7 +95,7 @@ Keywords
    |             **Datatype:** string
    |                - *'anharmonic AS'* :  anharmonic adiabatic shift model
    |                - *'harmonic'*      :  The molecular potential of the ground and excited state
-   |                                     are expanded harmonically around equilibrium geometries.
+   |                                       are expanded harmonically around equilibrium geometries.
    |                - *'gdml'*          :  gradient-domain machine-learned potentials ( [sGDML]_ )
    |
    | Keywords for the 'anharmonic AS' potential:
@@ -126,7 +127,7 @@ Keywords
    |
    |          ``coupling``
    |
-   |             **Description:** Path to formatted checkpoint file wit the non-adiabatic coupling
+   |             **Description:** Path to formatted checkpoint file with the non-adiabatic coupling
    |                 vector between the ground and excited state.
    |             **Datatype:** string (path to fchk-file)
    |
@@ -135,18 +136,18 @@ Keywords
    |          ``ground``
    |
    |             **Description:** Path to sGDML model trained to reproduce ground state energies,
-   |                 gradients and Hessians
+   |                 gradients and Hessians.
    |             **Datatype:** string (path to npz-file)
    |
    |          ``excited``
    |
    |             **Description:** Path to formatted checkpoint file from frequency calculation
-   |                 at the excited state minimum
+   |                 at the excited state minimum.
    |             **Datatype:** string (path to fchk-file)
    |
    |          ``coupling``
    |
-   |             **Description:** Path to sGDML model trained to reproduce non-adiabatic coupling vectors
+   |             **Description:** Path to sGDML model trained to reproduce non-adiabatic coupling vectors.
    |             **Datatype:** string (path to npz-file)
    |
 
@@ -155,8 +156,8 @@ Keywords
 
    | **Description:** Name of the semiclassical propagator
    | **Datatype:** string
-   |    - 'HK' :  Herman Kluk propagator (see [HK]_)
-   |    - 'WM' :  Walton Manolopoulos propagator (see [WM]_)
+   |    - 'HK' :  Herman & Kluk propagator (see [HK]_)
+   |    - 'WM' :  Walton & Manolopoulos propagator (see [WM]_)
    | **Default:** ``HK``
 
 .. topic:: ``num_steps``
@@ -190,8 +191,8 @@ Keywords
    |
    |          ``correlations``
    |
-   |             **Description:** name of file where results will be written to in npz-format.
-   |                 The binary file can be read with numpy. It contains the autocorrelation and correlation function
+   |             **Description:** Name of file where results will be written to in npz-format.
+   |                 This binary file can be read with numpy. It contains the autocorrelation and correlation function
    |                 for internal conversion on the equidistant grid specified by `num_steps` and `time_step_fs`.
    |             **Datatype:** string
    |             **Default:** 'correlations.npz'
