@@ -189,7 +189,7 @@ Keywords
    | **Datatype:** JSON
    | **Keywords:**
    |
-   |             ``correlations``
+   |          ``correlations``
    |
    |             **Description:** name of file where results will be written to in npz-format.
    |                 The binary file can be read with numpy. It contains the autocorrelation and correlation function
@@ -197,11 +197,10 @@ Keywords
    |             **Datatype:** string
    |             **Default:** 'correlations.npz'
    |
-   |             ``overwrite``
+   |          ``overwrite``
    |
-   |		 **Description:** The final wavefunctions, which were generated in a previous
-   |                 calculation and saved via the ``save_ref`` command, are read in from this
-   |                 file. The extension .archive will be appended.
+   |		 **Description:** If set to true an existing npz-file is overwritten.
+   |                 Otherwise correlation functions from different runs are accumulated.
    |             **Datatype:** boolean
    |             **Default:** true
 
