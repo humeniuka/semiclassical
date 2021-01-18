@@ -16,7 +16,7 @@ def get_property(property, package):
 from os import path
 
 this_dir = path.abspath(path.dirname(__file__))
-with open(path.join(this_dir, 'README.md'), encoding='utf8') as f:
+with open(path.join(this_dir, 'README.rst'), encoding='utf8') as f:
     long_description = f.read()
 
 # Scripts

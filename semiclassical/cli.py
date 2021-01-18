@@ -32,6 +32,7 @@ import os.path
 import numpy as np
 import torch
 import ase
+import tqdm
 
 # Local imports
 import semiclassical
@@ -292,12 +293,15 @@ def _run_semiclassical_dynamics(task):
         propagator.initial_conditions(q0, p0, Gamma_0,
                                       ntraj=num_samples)
 
-        for t in range(0, nt):
-            autocorrelation_[t] += propagator.autocorrelation()
-            ic_correlation_[t] += propagator.ic_correlation(potential, energy0_es=en_zpt)
-            if t % 1 == 0:
-                logger.info(f" ({repetition+1:6}/{num_repetitions:6}) {t+1:6}/{nt:6}   time= {times[t]:10.4f}   time/fs= {times[t]*units.autime_to_fs:10.4f}")
-            propagator.step(potential, dt)
+        with tqdm.tqdm(total=nt) as progress_bar:
+            for t in range(0, nt):
+                autocorrelation_[t] += propagator.autocorrelation()
+                ic_correlation_[t] += propagator.ic_correlation(potential, energy0_es=en_zpt)
+
+                progress_bar.set_description(f" ({repetition+1:6}/{num_repetitions:6}) {t+1:6}/{nt:6}   time= {times[t]:10.4f}   time/fs= {times[t]*units.autime_to_fs:10.4f}")
+                progress_bar.update(1)
+
+                propagator.step(potential, dt)
 
         # running average
         #

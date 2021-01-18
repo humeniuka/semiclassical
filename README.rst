@@ -14,7 +14,16 @@ Milestones
  * include Herzberg-Teller effect (coordinate dependence of non-adiabatic coupling vectors)
  * implement Hessians for sGDML force field (*done*)
 
+   
+Requirements
+------------
 
+Required python packages:
+
+ * pytorch
+ * numpy, scipy, matplotlib
+ * ase (Atomic Simulation Environment)
+ * tqdm
 
 Complex numbers are not supported in older releases of pytorch, 
 this code requires pytorch=1.8.0 or higher.
