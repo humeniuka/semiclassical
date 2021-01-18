@@ -50,7 +50,7 @@ setup(
     author_email='alexander.humeniuk@gmail.com',
     license='LICENSE.txt',
     packages=find_packages(),
-    install_requires=['numpy >= 1.19.0', 'ase >= 3.16.2', 'torch >= 1.8.0.dev20201208'],
+    install_requires=['numpy >= 1.19.0', 'ase >= 3.16.2', 'torch >= 1.8.0'],
     entry_points={
         'console_scripts': ['semi=semiclassical.cli:main']
     },
