@@ -1,16 +1,14 @@
 #!/usr/bin/env python
-"""
-The global sign of the NAC vectors is arbitrary. To obtain a continuous vector field
-the sign is chosen so as to maximize the overlap with the NAC vector at the initial
-geometry.
-"""
-import ase
-from ase import io
+# coding: utf-8
+
 import sys
 import numpy as np
 import numpy.linalg as la
 import argparse
 import tqdm
+
+import ase.io
+from ase.io import extxyz
 
 parser = argparse.ArgumentParser(
     description="""Postprocesses forces or non-adiabatic coupling vectors in extended XYZ file. 
@@ -147,7 +145,8 @@ def align_phases(molecules):
     """
     # We start with the molecule with the largest momentum vector. 
     momlen = [la.norm(mol.get_momenta()) for mol in molecules]
-    iL = np.argmin(momlen)
+    iL = np.argmax(momlen)
+    assert momlen[iL] > 0.0
     # `assigned` is the list of molecules whose phases have been determined
     assigned = [molecules[iL]]
     del molecules[iL]
@@ -195,7 +194,20 @@ def align_phases(molecules):
             
     return assigned
 
-molecules = io.read(args.input_xyz, format="extxyz", index=":")
+
+def _properties_parser(comment_line):
+    dic = extxyz.key_val_str_to_dict(comment_line)
+    # If the extended xyz file lacks a property string,
+    # we assume that there are 7 columns with symbols, coordinates and forces
+    if not 'Properties' in dic:
+        dic['Properties'] = 'species:S:1:pos:R:3:forces:R:3'
+    return dic
+
+# read all frames from trajectory with forces in extended XYZ format
+molecules = ase.io.read(args.input_xyz, index=":",
+                        format="extxyz",
+                        properties_parser=_properties_parser)
+assert len(molecules) > 0, f"Could not read any molecule from input file {args.input_xyz}."
 
 # ASE does not allow assigning forces, therefore the forces are stored as momenta.
 for i,mol in enumerate(molecules):
@@ -224,5 +236,5 @@ if args.remove_rotation:
 # save processed molecules
 with open(args.output_xyz, "w") as f:
     for i,mol in enumerate(molecules):
-        io.extxyz.write_extxyz(f, [mol], columns=['symbols', 'positions', 'momenta'], write_results=False, append=True)
+        ase.io.extxyz.write_extxyz(f, [mol], columns=['symbols', 'positions', 'momenta'], write_results=False, append=True)
 
