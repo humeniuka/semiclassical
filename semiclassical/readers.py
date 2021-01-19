@@ -286,7 +286,7 @@ class FormattedCheckpointFile(object):
 
         Returns
         -------
-        numbers :  ndarray(3*nat,)
-          atomic numbers for each 
+        numbers :  ndarray(nat,)
+          atomic number for each atom
         """
         return self.data["Atomic numbers"]
