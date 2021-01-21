@@ -434,7 +434,7 @@ class MolecularHarmonicPotential(_MolecularPotentialBase, object):
         self.nac0 = torch.from_numpy(nac_fchk.nonadiabatic_coupling())
         self._masses = torch.from_numpy(freq_fchk.masses())
         self._dim = len(self._masses)
-                
+        
     def harmonic_approximation(self, r):
         """
         local harmonic approximation to the potential energy surface around a point r:
