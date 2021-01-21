@@ -458,10 +458,10 @@ class MolecularHarmonicPotential(_MolecularPotentialBase, object):
           batch of Hessian matrices
         """
         if (self.energy0.device != r.device):
-            self.energy0.to(r.device)
-            self.pos0.to(r.device)
-            self.grad0.to(r.device)
-            self.hess0.to(r.device)
+            self.energy0 = self.energy0.to(r.device)
+            self.pos0 = self.pos0.to(r.device)
+            self.grad0 = self.grad0.to(r.device)
+            self.hess0 = self.hess0.to(r.device)
 
         dim,n = r.size()
         # r'-r
@@ -496,7 +496,7 @@ class MolecularHarmonicPotential(_MolecularPotentialBase, object):
           derivative coupling vector tau1(r)
         """
         if (self.nac0.device != r.device):
-            self.nac0.to(r.device)
+            self.nac0 = self.nac0.to(r.device)
 
         tau1 = self.nac0.unsqueeze(1).expand_as(r)
         return tau1

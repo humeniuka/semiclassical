@@ -112,16 +112,20 @@ def _run_semiclassical_dynamics(task):
         with open(p['coupling']) as f:
             nacs_fchk = readers.FormattedCheckpointFile(f)
         potential = potentials.MolecularHarmonicPotential(freq_fchk, nacs_fchk)
-
+        
         # initial wavepacket on excited state
         with open(p['excited']) as f:
-            minimumI = readers.FormattedCheckpointFile(f)
-        x0, Gamma_0, en_zpt = minimumI.vibrational_groundstate()
+            excited_fchk = readers.FormattedCheckpointFile(f)
+        x0, Gamma_0, en_zpt = excited_fchk.vibrational_groundstate()
         # center of initial wavepacket
         q0 = torch.from_numpy(x0)
         # momentum of initial wavepacket
         p0 = torch.zeros_like(q0)
 
+        ### DEBUG
+        en_zpt = 0.0
+        ###
+        
         # frozen Gaussian are equal to vibrational ground state
         Gamma_0 = torch.from_numpy(Gamma_0)
 

@@ -206,7 +206,7 @@ class FormattedCheckpointFile(object):
         if (nac == 0.0).all():
             logger.warning(f"All components of non-adiabatic coupling vector in {self.filename} are zero.")
         return nac
-    def vibrational_groundstate(self, zero_threshold=100.0):
+    def vibrational_groundstate(self, zero_threshold=200.0):
         """
         The vibrational ground state belonging to the harmonic potential is given by
 
@@ -243,9 +243,7 @@ class FormattedCheckpointFile(object):
 
         # vibrational energies
         w = np.sqrt(w2)
-        # zero-point energy
-        en_zpt = 0.5 * hbar * np.sum(w)
-        
+
         logger.info("Normal mode frequencies (cm-1)")
         logger.info(w*units.hartree_to_wavenumbers)
 
@@ -260,6 +258,10 @@ class FormattedCheckpointFile(object):
         dim = x0.shape[0]
         logger.info(f"number of zero modes : {dim - num_non_zero}")
 
+        # zero-point energy
+        en_zpt = 0.5 * hbar * np.sum(w[non_zero])
+        logger.info(f"Zero point energy (cm-1) = {en_zpt * units.hartree_to_wavenumbers}")
+        
         # L = hbar^{-1/2} M^{1/2} V w^{1/2}
         L = hbar**(-1/2) * np.einsum('i,ij,j->ij', msq, V[:,non_zero], np.sqrt(w[non_zero]))
 

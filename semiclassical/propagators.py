@@ -503,8 +503,10 @@ class HermanKlukPropagator(object):
 
         # x = Lz^T . (z - z0)
         # sample from standard normal distribution ~ exp(-1/2 x^T x)
-        distribution = MultivariateNormal(torch.zeros(2*num_non_zero).double(),    # center
-                                          torch.eye(2*num_non_zero).double()  )    # covariance
+        distribution = MultivariateNormal(
+            torch.zeros(2*num_non_zero).double().to(device),    # center
+            torch.eye(2*num_non_zero).double().to(device)       # covariance
+        ) 
         
         # sample initial positions and momenta from normal distribution
         xi = distribution.sample((ntraj,)).T
@@ -1524,7 +1526,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
           potential energy surface, which provides non-adiabatic couplings
           between initial and final electronic states
         energy0_es :  float
-          zero-point energy of vibrational ground on initial surface
+          zero-point energy of vibrational ground state on initial surface
         
         Returns
         -------
