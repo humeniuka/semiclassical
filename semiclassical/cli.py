@@ -122,10 +122,6 @@ def _run_semiclassical_dynamics(task):
         # momentum of initial wavepacket
         p0 = torch.zeros_like(q0)
 
-        ### DEBUG
-        en_zpt = 0.0
-        ###
-        
         # frozen Gaussian are equal to vibrational ground state
         Gamma_0 = torch.from_numpy(Gamma_0)
 
