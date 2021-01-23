@@ -16,6 +16,7 @@ import scipy.linalg as sla
 from collections import OrderedDict
 import re
 import logging
+import ase.atoms
 
 # # Local Imports
 from semiclassical import units
@@ -206,7 +207,7 @@ class FormattedCheckpointFile(object):
         if (nac == 0.0).all():
             logger.warning(f"All components of non-adiabatic coupling vector in {self.filename} are zero.")
         return nac
-    def vibrational_groundstate(self, zero_threshold=200.0):
+    def vibrational_groundstate(self):
         """
         The vibrational ground state belonging to the harmonic potential is given by
 
@@ -215,12 +216,8 @@ class FormattedCheckpointFile(object):
               0                0                           0        0     0
 
         provided that x0 is the minimum. This function computes the width parameter matrix
-        Gamma_0 from the Hessian at the minimum.
-
-        Optional
-        --------
-        zero_threshold   :  float > 0
-          threshold for considering normal mode frequencies as zero (in cm-1)
+        Gamma_0 from the Hessian at the minimum. Rotational and translational modes are 
+        projected out.
 
         Returns
         -------
@@ -238,36 +235,131 @@ class FormattedCheckpointFile(object):
         imsq = 1.0/msq
         # mass-weighted Hessian H
         hess_mwc = np.einsum('i,ij,j->ij', imsq, hess, imsq)
+
         # diagonalize symmetric  H = V.diag(w).V^T
         w2,V = sla.eigh(hess_mwc)
 
         # vibrational energies
-        w = np.sqrt(w2)
+        w = np.sqrt(w2+0j)
 
-        logger.info("Normal mode frequencies (cm-1)")
+        logger.info("Normal mode frequencies (cm-1) before eliminating translation/rotation")
         logger.info(w*units.hartree_to_wavenumbers)
 
-        if not (w * units.hartree_to_wavenumbers > zero_threshold).all():
-            logger.warning("At a minimum all frequencies should be positive, found imaginary ones.")
+        # The molecular potential only depends on the internal degrees of freedom and does not
+        # change if the molecule is rotated or translated. Therefore 5 (in linear molecules)
+        # or 6 (in non-linear molecules) normal modes have zero frequency. Because of numerical
+        # errors the eigenvalues of these rotational and translational modes might differ from 0
+        # so that they can be confused with internal vibrational modes with low frequencies.
+        # To separate the rotations/translations from internal vibrations, the normal modes for
+        # rotation and translation are constructed and the Hessian is transformed into a basis
+        # where the first 5 or 6 basis vectors correspond to translations/rotations.
         
-        # select non-zero vibrational modes
-        non_zero = (w * units.hartree_to_wavenumbers) > zero_threshold
-        # number of non singular dimensions
-        num_non_zero = np.count_nonzero( non_zero )
+        # project out rotation and translation
+        mol = ase.atoms.Atoms(numbers=self.atomic_numbers())
+        mol.set_positions(x0.reshape(-1,3))
+        # shift molecule to center of mass
+        mol.set_masses(mass[::3])
+        center = mol.get_center_of_mass()
+        logger.info(f"center of mass (Ang) : {center * units.bohr_to_angs}")
+        mol.translate(-center)
+        r = mol.get_positions()
+        
+        # 1) find principle axes of inertia
+        # eigenvalues and eigenvectors of tensor of inertia
+        principal_moments, Xrot = mol.get_moments_of_inertia(vectors=True)
+        # Xrot[i,:] is the eigenvector belonging to the i-th principal moment
 
-        dim = x0.shape[0]
-        logger.info(f"number of zero modes : {dim - num_non_zero}")
+        # 2) generate matrix D for transformation from mass-weighted cartesian coordinates
+        # to internal coordinates, the first 3 vectors are for translation, the next 2 or 3 for rotation
+        # and the remaining 3*nat-5 or 3*nat-6 vectors are for internal vibrations.
+
+        D = np.zeros_like(hess_mwc)
+        # mass-weighted coordinates
+        mwc = msq.reshape((-1,3)) * r
+
+        # translation
+        for i in [0,1,2]:
+            # rigid shift along x-, y- and z-axis
+            #            [1 0 0]
+            # sqrt(mi) * [0 1 0]  for each atom i
+            #            [0 0 1]
+            D[i::3,i] = msq[i::3]
+            
+        nat, _ = r.shape
+        # rotations, `nz` counts numbers of zero modes
+        nz = 3
+        for i in [0,1,2]:
+            if principal_moments[i] > 0.0:
+                # rigid rotation around principal axes
+                #  dr = omega x (sqrt(m) r)
+                D[:,nz] = np.cross(Xrot[i,:], mwc).reshape(-1)
+                nz += 1
+                
+        # normalize
+        for i in range(0,nz):
+            D[:,i] /= sla.norm(D[:,i])
+
+        # 3) Gram-Schmidt orthogonalization with respect to the remaining vectors
+        dim,_ = D.shape
+        for n in range(nz, dim):
+            D[:,n] = V[:,n]
+            for m in range(0, n):
+                # numerically stable modified Gram-Schmidt
+                D[:,n] -= np.dot(D[:,m],D[:,n])*D[:,m] 
+            D[:,n] /= sla.norm(D[:,n])
+
+        # check that D is really an orthonormal basis
+        err = sla.norm(np.dot(D.T, D) - np.eye(dim))
+        assert err < 1.0e-10, f"Gram-Schmidt orthogonalization failed, |D^T.D-Id|= {err}"
+
+        logger.info(f"rotational/translational modes   : {nz}")
+        if (nz == 3):
+            logger.error("All principal moments of inertia are zero. Is this a single atom?")
+        elif (nz == 5):
+            logger.info("found a linear molecule")
+        elif (nz == 6):
+            logger.info("found a non-linear molecule")
+        else:
+            logger.error(f"Strange number of rotational/translation modes, expected to find 3 (atom), 5 (linear) of 6 (general molecule), but got {nz}")
+
+        # 4) Transform mass-weighted Hessian matrix to internal coordinates and diagonalize
+        #  Hi = D^T . Hmwc . D
+        hess_internal = np.einsum('ij,jk,kl->il', D.T, hess_mwc, D)
+
+        # diagonalize symmetric  Hi = Vi.diag(w).Vi^T
+        # The subblocks for external zero modes and the subblock belonging to
+        # internal vibrations are diagonalized separately.
+        
+        # external zero modes
+        wz2,Vz = sla.eigh(hess_internal[:nz,:nz])
+        wz = np.sqrt(wz2+0j)
+        # If coupling between rotations and vibrations is significant, 3 of these
+        # frequencies may differ from 0.0.
+        logger.info("Frequencies (cm-1) of translations and rotations")
+        logger.info(wz*units.hartree_to_wavenumbers)
+        
+        # internal vibrational modes
+        wi2,Vi = sla.eigh(hess_internal[nz:,nz:])
+        wi = np.sqrt(wi2)
+
+        logger.info("Vibrational frequencies (cm-1) after eliminating translation/rotation")
+        logger.info(wi*units.hartree_to_wavenumbers)
+
+        if not (wi * units.hartree_to_wavenumbers > 0.0).all():
+            logger.error("At a minimum all vibrational frequencies should be positive, found imaginary ones.")
 
         # zero-point energy
-        en_zpt = 0.5 * hbar * np.sum(w[non_zero])
-        logger.info(f"Zero point energy (cm-1) = {en_zpt * units.hartree_to_wavenumbers}")
-        
-        # L = hbar^{-1/2} M^{1/2} V w^{1/2}
-        L = hbar**(-1/2) * np.einsum('i,ij,j->ij', msq, V[:,non_zero], np.sqrt(w[non_zero]))
+        en_zpt = 0.5 * hbar * np.sum(wi)
+        logger.info(f"Zero point energy (cm-1) : {en_zpt * units.hartree_to_wavenumbers}")
+
+        # transform normal modes back from internal coordinates to mass-weighted cartesian ones
+        V = np.dot(D[:,nz:], Vi)
+        # L = hbar^{-1/2} M^{1/2} D Vi w^{1/2}
+        L = hbar**(-1/2) * np.einsum('i,ij,j->ij', msq, V, np.sqrt(wi))
 
         # Gamma_0 = L . L^T
         Gamma_0 = np.einsum('ij,kj->ik', L, L)
-
+        
         return x0, Gamma_0, en_zpt
         
     def masses(self):

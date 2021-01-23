@@ -10,6 +10,7 @@ hbar = 1.0
 # conversion factors
 hartree_to_wavenumbers = 219474.63 # E(in cm^-1) = E(in Hartree) * hartree_to_wavenumbers
 hartree_to_ev = 27.211396132
+bohr_to_angs = 0.529177249
 autime_to_fs = 0.02418884326505
 
 # converts masses from amu (multiples of 1/12 x mass of C-12)
