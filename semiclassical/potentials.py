@@ -392,6 +392,8 @@ class MorsePotential(object):
 # for mixing in some methods specifically for molecules 
 class _MolecularPotentialBase(object):
     _masses, _dim = None, None
+    # Energies are measured relative to this origin.
+    _origin = 0.0
     def dimensions(self):
         """
         number of nuclear degrees of freedom
@@ -412,6 +414,66 @@ class _MolecularPotentialBase(object):
         """
         return self._masses
 
+    def minimize(self, r_guess, maxiter=10000, rtol=1.0e-6, gtol=1.0e-8):
+        """
+        find the local minimum of the potential energy surface in the vicinity
+        of `r_guess`. 
+
+        The origin of the energy axis is shifted so that at the minimum E=0,
+        henceforth all energies are measured relative to the bottom of the potential.
+
+        Parameters
+        ----------
+        r_guess  :  real Tensor (dim,)
+          minimization starts at this position
+
+        Optional
+        --------
+        maxiter  :  int
+          maximum number of optimization steps
+        rtol     :  float (bohr)
+          optimization stops when geometry changes by < ftol
+        gtol     :  float (Hartree bohr^-1)
+          optimization stops when gradient norm is < gtol
+
+        Returns
+        -------
+        nothing, but sets `self._origin`
+        """
+        # unset origin of energy axis
+        self._origin = 0.0
+        # find minimum of potential energy surface
+        r = r_guess.unsqueeze(1)
+        for i in range(0, maxiter):
+            energy, grad, hess = self.harmonic_approximation(r)
+            # The next geometry r' is obtained by minimizing the harmonic model potential
+            # at the current geometry r:
+            #  V(r') = V(r) + [grad V(r)](r'-r) + 1/2 (r'-r)^T [hess V(r)] (r'-r)
+            # The condition for a minimum
+            #  dV/dr(r') = 0
+            # leads to
+            #  r' = r + [hess V(r)]^{-1} (- [grad V(r)])
+            # solve AX = B
+            dr, _ = torch.solve(-grad, hess.squeeze())
+
+            # stop if gradient d(energy)/dr is small enough or position does not change anymore
+            grad_norm = torch.norm(grad)
+            disp_norm = torch.norm(dr)
+            logger.info(f"  iteration= {i:5}  energy= {energy.item():f} Hartree  |gradient|= {grad_norm:e} (threshold= {gtol} )  |geometry change|= {disp_norm:e} (threshold= {rtol} )")
+            if (grad_norm < gtol) or (disp_norm < rtol):
+                logger.info("  converged")
+                break
+            # move to next geometry
+            r = r + dr
+        else:
+            raise RuntimeError(f"Could not find minimum within {maxiter} iterations.")
+
+        # energy at minimum
+        emin, _, _ = self.harmonic_approximation(r)
+        self._origin = emin.item()
+        logger.info(f"shift origin of energy axis to minimum energy = {self._origin} Hartree ")
+
+        
 class MolecularHarmonicPotential(_MolecularPotentialBase, object):
     """
     harmonic expansion around a reference geometry (usually minimum):
@@ -475,7 +537,7 @@ class MolecularHarmonicPotential(_MolecularPotentialBase, object):
                 + torch.einsum('ij,jn->in', self.hess0, dr))
         hess = self.hess0.unsqueeze(2).expand(-1,-1,n)
         
-        return vpot, grad, hess
+        return vpot-self._origin, grad, hess
 
     def derivative_coupling_1st(self, r):
         """
@@ -577,7 +639,7 @@ class MolecularGDMLPotential(_MolecularPotentialBase, object):
         # so we have to change the order of the axes.
         vpot, grad, hess = self.gdml_pot.forward(r.permute(1,0))
         
-        return vpot, grad.permute(1,0), hess.permute(1,2,0)
+        return vpot-self._origin, grad.permute(1,0), hess.permute(1,2,0)
 
     def derivative_coupling_1st(self, r):
         """

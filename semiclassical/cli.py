@@ -199,7 +199,13 @@ def _run_semiclassical_dynamics(task):
     else:
         raise ConfigurationError(f"Unknown potential type in {task['potential']}")
 
-
+    # Find minimum of final potential energy surface and set it as the origin of the energy axis.
+    # We start at the minimum of the initial potential and follow the gradient on
+    # the final potential until the minimum is found. All energies are measured with
+    # respect to the minimum energy.
+    logger.info("find minimum on final potential energy surface")
+    potential.minimize(q0)
+    
     Gamma_i = Gamma_0
     Gamma_t = Gamma_0
 
