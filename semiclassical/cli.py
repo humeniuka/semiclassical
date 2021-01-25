@@ -84,6 +84,11 @@ def main():
                              dest='export_tables',
                              action='store_true',
                              help='export auto- and IC-correlation functions to tables, the output filenames are determined by stripping the .npz suffix from the input files and replacing it with .dat .')
+    parser_plot.add_argument('-q',
+                             '--quiet',
+                             dest='quiet',
+                             action='store_true',
+                             help='do not open window for plotting, only export tables.')
     
     args = parser.parse_args()
 
@@ -99,7 +104,8 @@ def main():
         elif args.command == 'plot':
             if args.export_tables:
                 _export_tables(args.correlation_files)
-            _plot_correlation_functions(args.correlation_files)
+            if not args.quiet:
+                _plot_correlation_functions(args.correlation_files)
             
     except:
         logging.exception("An error occurred, see traceback below")
