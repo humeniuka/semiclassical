@@ -79,7 +79,12 @@ def main():
         'plot',
         help="plot correlation functions from .npz files")
     parser_plot.add_argument('correlation_files', type=str, metavar='correlation.npz', help='plot correlation functions from one or more npz-files', nargs='+')
-
+    parser_plot.add_argument('-e',
+                             '--export',
+                             dest='export_tables',
+                             action='store_true',
+                             help='export auto- and IC-correlation functions to tables, the output filenames are determined by stripping the .npz suffix from the input files and replacing it with .dat .')
+    
     args = parser.parse_args()
 
     try:
@@ -92,6 +97,8 @@ def main():
                 _run_semiclassical_dynamics(task)
 
         elif args.command == 'plot':
+            if args.export_tables:
+                _export_tables(args.correlation_files)
             _plot_correlation_functions(args.correlation_files)
             
     except:
@@ -337,6 +344,42 @@ def _run_semiclassical_dynamics(task):
                  ic_correlation=ic_correlation,
                  trajectories=ntraj_tot)
 
+def _export_tables(filenames):
+    """
+    save correlation functions to .dat files for plotting with external programmes
+
+    The output filenames are determined by stripping the ".npz" suffix
+    from the input files and replacing it with ".dat".
+
+    Parameters
+    ----------
+    filenames  :  names of .npz files
+      contain correlation functions
+    """
+    for ifile, filename in enumerate(filenames):
+        data = np.load(filename)
+
+        datfile = os.path.splitext(filename)[0]+".dat"
+        logger.info(f"exporting correlation functions from '{filename}' to table '{datfile}'")
+        # write table with correlation functions to file
+        with open(datfile, "w") as f:
+            f.write('# autoorrelation function\n')
+            f.write('# Time/fs                  Re[C(t)]                 Im[C(t)]\n')
+            np.savetxt(f, np.vstack(
+                (data['times'] * units.autime_to_fs,
+                 data['autocorrelation'].real,
+                 data['autocorrelation'].imag)
+            ).T)
+            f.write('\n')
+            f.write('# IC-correlation function\n')
+            f.write('# Time/fs                  Re[kIC(t)]               Im[kIC(t)]\n')
+            np.savetxt(f, np.vstack(
+                (data['times'] * units.autime_to_fs,
+                 data['ic_correlation'].real,
+                 data['ic_correlation'].imag)
+            ).T)
+    
+    
 def _plot_correlation_functions(filenames):
     """
     plot autocorrelation and IC correlation loaded from .npz file
