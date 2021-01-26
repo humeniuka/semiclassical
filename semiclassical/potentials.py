@@ -414,7 +414,7 @@ class _MolecularPotentialBase(object):
         """
         return self._masses
 
-    def minimize(self, r_guess, maxiter=10000, rtol=1.0e-6, gtol=1.0e-8):
+    def minimize(self, r_guess, maxiter=10000, rtol=1.0e-6, gtol=1.0e-10):
         """
         find the local minimum of the potential energy surface in the vicinity
         of `r_guess`. 
@@ -446,6 +446,7 @@ class _MolecularPotentialBase(object):
         r = r_guess.unsqueeze(1)
         for i in range(0, maxiter):
             energy, grad, hess = self.harmonic_approximation(r)
+
             # The next geometry r' is obtained by minimizing the harmonic model potential
             # at the current geometry r:
             #  V(r') = V(r) + [grad V(r)](r'-r) + 1/2 (r'-r)^T [hess V(r)] (r'-r)
@@ -456,6 +457,14 @@ class _MolecularPotentialBase(object):
             # solve AX = B
             dr, _ = torch.solve(-grad, hess.squeeze())
 
+            # directional derivative   dE = dE/dr * dr
+            delta_energy = torch.sum(grad*dr)
+
+            if delta_energy > 0.0:
+                # dr is not a descent direction, take a steepest descent step
+                dr = -grad
+                delta_energy = torch.sum(grad*dr)
+            
             # stop if gradient d(energy)/dr is small enough or position does not change anymore
             grad_norm = torch.norm(grad)
             disp_norm = torch.norm(dr)
@@ -463,8 +472,33 @@ class _MolecularPotentialBase(object):
             if (grad_norm < gtol) or (disp_norm < rtol):
                 logger.info("  converged")
                 break
+
+            # perform a line search along the search direction `dr` using the
+            # Armijo backtracking algorithm, see Algorithm 3.1 in
+            # J. Nocedal, S. Wright, 'Numerical Optimization', Springer, 2006
+            
+            # parameters for line search
+            rho = 0.3
+            c = 0.0001
+            lmax = 100
+
+            # find optimal step size a*dr
+            a = 1.0
+            for l in range(0, lmax):
+                r_interp = r + a*dr
+                energy_interp, _, _ = self.harmonic_approximation(r_interp)
+                if energy_interp <= energy + c*a*delta_energy:
+                    # found step size that leads to a sufficient decrease in energy
+                    break
+                else:
+                    # reduce step size
+                    a *= rho
+            else:
+                raise RuntimeError("Linesearch failed! Could not find a step length that satisfies the sufficient decrease condition.")
+                    
             # move to next geometry
-            r = r + dr
+            r = r_interp
+            
         else:
             raise RuntimeError(f"Could not find minimum within {maxiter} iterations.")
 
