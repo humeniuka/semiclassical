@@ -93,6 +93,7 @@ def main():
     args = parser.parse_args()
 
     # # GPU or CPU ?
+    global device
     torch.set_default_dtype(torch.float64)
     if torch.cuda.is_available():
         args.cuda = min(args.cuda, torch.cuda.device_count())
