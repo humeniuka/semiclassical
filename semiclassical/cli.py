@@ -96,8 +96,8 @@ def main():
     global device
     torch.set_default_dtype(torch.float64)
     if torch.cuda.is_available():
-        args.cuda = min(args.cuda, torch.cuda.device_count())
-        device = torch.device(f"cuda:{args.cuda}")
+        cuda_id = min(args.cuda, torch.cuda.device_count())
+        device = torch.device(f"cuda:{cuda_id}")
     else:
         device = torch.device('cpu')
     
