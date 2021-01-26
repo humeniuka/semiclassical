@@ -141,9 +141,10 @@ def _run_semiclassical_dynamics(task):
     elif p['type'] == "gdml":
         # ground state potential and non-adiabatic coupling
         model_pot = np.load(p['ground'], allow_pickle=True)
-        model_nac = np.load(p['coupling'], allow_pickle=True)
+        with open(p['coupling']) as f:
+            nacs_fchk = readers.FormattedCheckpointFile(f)
 
-        potential = potentials.MolecularGDMLPotential(model_pot, model_nac)
+        potential = potentials.MolecularGDMLPotential(model_pot, nacs_fchk)
 
         # initial wavepacket on excited state
         with open(p['excited']) as f:

@@ -594,16 +594,16 @@ class MolecularGDMLPotential(_MolecularPotentialBase, object):
     model_pot : NpzFile or mapping
       Data for sGDML model fitted to reproduce the ground state potential energy surface.
       It is assumed that the model uses atomic units (bohr for lengths and Hartree for energies).
-    model_nac : NpzFile or mapping
-      Data for sGDML model fitted to reproduce the first order non-adiabatic coupling vector
-      between the ground and excited state.
+    nacs_fchk :  FormattedCheckpointFile
+      formatted checkpoint file object with cartesian non-adiabatic coupling vector
     """
-    def __init__(self, model_pot, model_nac):
+    def __init__(self, model_pot, nacs_fchk):
         # predict energy, gradient and Hessian of ground state potential
         self.gdml_pot = GDMLPredict(model_pot)
-        self.gdml_nac = GDMLPredict(model_nac)
+        # constant non-adiabatic coupling vector (Condon approximation)
+        self.nac0 = torch.from_numpy(nacs_fchk.nonadiabatic_coupling())
 
-        assert (model_pot['z'] == model_nac['z']).all(), "GDML models for potential energy and NAC vector should be for the same molecule."
+        assert (model_pot['z'] == nacs_fchk.atomic_numbers()).all(), "GDML models for potential energy and NAC vector should be for the same molecule."
         # mass in atomic units for each cartesian coordinate
         self._masses = (torch.tensor([atomic_masses[z]*units.amu_to_aumass for z in model_pot['z']])
                         .repeat(3))
@@ -659,15 +659,11 @@ class MolecularGDMLPotential(_MolecularPotentialBase, object):
         tau1  :  real Tensor (d,*)
           derivative coupling vector tau1(r)
         """
-        if (self.gdml_nac.device != r.device):
-            self.gdml_nac.to(r.device)
+        if (self.nac0.device != r.device):
+            self.nac0 = self.nac0.to(r.device)
 
-        # GDMLPredict expects the first axis to be the batch dimension,
-        # while in the propagators the last dimension is the batch dimension,
-        # so we have to change the order of the axes.
-        tau1 = self.gdml_nac.forward(r.permute(1,0))[1]
-        
-        return tau1.permute(1,0)
+        tau1 = self.nac0.unsqueeze(1).expand_as(r)
+        return tau1
     
     def derivative_coupling_2nd(self, r):
         """

@@ -156,9 +156,9 @@ Keywords
    |
    |          ``coupling``
    |
-   |             **Description:** Path to sGDML model trained to reproduce non-adiabatic coupling vectors.
-   |             **Datatype:** string (path to npz-file)
-   |
+   |             **Description:** Path to formatted checkpoint file with the non-adiabatic coupling
+   |                 vector between the ground and excited state.
+   |             **Datatype:** string (path to fchk-file)
 
 
 .. topic:: ``propagator``
@@ -295,7 +295,7 @@ with 'gdml' potential
 	    "type"      : "gdml",
 	    "ground"    : "pot_s0.npz",
 	    "excited"   : "opt_freq_s1.fchk",
-	    "coupling"  : "nac_s0-s1.npz"
+	    "coupling"  : "opt_freq_s1.fchk"
 	},
 	"propagator" : "HK",
 	"batch_size"            : 1000,
