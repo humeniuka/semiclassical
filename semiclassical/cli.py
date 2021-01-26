@@ -91,6 +91,15 @@ def main():
                              help='do not open window for plotting, only export tables.')
     
     args = parser.parse_args()
+
+    # run on GPU or CPU ?
+    global device
+    torch.set_default_dtype(torch.float64)
+    if torch.cuda.is_available():
+        args.cuda = min(args.cuda, torch.cuda.device_count())
+        device = torch.device(f"cuda:{args.cuda}")
+    else:
+        device = torch.device('cpu')
     
     try:
         
@@ -115,16 +124,6 @@ class ConfigurationError(Exception):
         
 def _run_semiclassical_dynamics(task):
     assert task['title'] == "internal conversion"
-
-    # run on GPU or CPU ?
-    global device
-    torch.set_default_dtype(torch.float64)
-    if torch.cuda.is_available():
-        args.cuda = min(args.cuda, torch.cuda.device_count())
-        device = torch.device(f"cuda:{args.cuda}")
-    else:
-        device = torch.device('cpu')
-    logger.info(f"running on {device}")
     
     # ground state potential and non-adiabatic couplings
     p = task['potential']
