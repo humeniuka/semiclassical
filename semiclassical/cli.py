@@ -92,6 +92,15 @@ def main():
     
     args = parser.parse_args()
 
+    # # GPU or CPU ?
+    torch.set_default_dtype(torch.float64)
+    if torch.cuda.is_available():
+        args.cuda = min(args.cuda, torch.cuda.device_count())
+        device = torch.device(f"cuda:{args.cuda}")
+    else:
+        device = torch.device('cpu')
+    logger.info(f"running on {device}")
+    
     try:
         
         if args.command == 'dynamics':
@@ -247,16 +256,6 @@ def _run_semiclassical_dynamics(task):
 
     propagator_name = task.get('propagator', 'HK')
     logger.info(f"  propagator                                : {propagator_name}")
-
-    # # GPU or CPU ?
-    torch.set_default_dtype(torch.float64)
-    if torch.cuda.is_available():
-        logger.info("CUDA available")
-        # If there are several GPU's available, we use the last one,
-        # i.e. "cuda:1" on a workstation with 2 GPUs.
-        device = torch.device("cuda:%d" % (torch.cuda.device_count()-1))
-    else:
-        device = torch.device('cpu')
 
     # The dynamics simulation is repeated multiple times with different randomly chosen
     # initial conditions, since only a limited number of trajectories can run in parallel
