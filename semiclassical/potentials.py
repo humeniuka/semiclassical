@@ -530,6 +530,7 @@ class MolecularHarmonicPotential(_MolecularPotentialBase, object):
         self.nac0 = torch.from_numpy(nac_fchk.nonadiabatic_coupling())
         self._masses = torch.from_numpy(freq_fchk.masses())
         self._dim = len(self._masses)
+        logger.info(f"atomic masses (multiples of electron mass) : {self._masses}")
         
     def harmonic_approximation(self, r):
         """
@@ -628,20 +629,21 @@ class MolecularGDMLPotential(_MolecularPotentialBase, object):
     model_pot : NpzFile or mapping
       Data for sGDML model fitted to reproduce the ground state potential energy surface.
       It is assumed that the model uses atomic units (bohr for lengths and Hartree for energies).
-    nacs_fchk :  FormattedCheckpointFile
+    nac_fchk  :  FormattedCheckpointFile
       formatted checkpoint file object with cartesian non-adiabatic coupling vector
     """
-    def __init__(self, model_pot, nacs_fchk):
+    def __init__(self, model_pot, nac_fchk):
         # predict energy, gradient and Hessian of ground state potential
         self.gdml_pot = GDMLPredict(model_pot)
         # constant non-adiabatic coupling vector (Condon approximation)
-        self.nac0 = torch.from_numpy(nacs_fchk.nonadiabatic_coupling())
+        self.nac0 = torch.from_numpy(nac_fchk.nonadiabatic_coupling())
 
-        assert (model_pot['z'] == nacs_fchk.atomic_numbers()).all(), "GDML models for potential energy and NAC vector should be for the same molecule."
+        assert (model_pot['z'] == nac_fchk.atomic_numbers()).all(), "GDML models for potential energy and NAC vector should be for the same molecule."
         # mass in atomic units for each cartesian coordinate
         self._masses = (torch.tensor([atomic_masses[z]*units.amu_to_aumass for z in model_pot['z']])
                         .repeat(3))
         self._dim = len(self._masses)
+        logger.info(f"atomic masses (multiples of electron mass) : {self._masses}")
         
     def harmonic_approximation(self, r):
         """

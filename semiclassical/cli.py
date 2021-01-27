@@ -157,8 +157,8 @@ def _run_semiclassical_dynamics(task):
 
         # initial wavepacket on excited state
         with open(p['excited']) as f:
-            minimumI = readers.FormattedCheckpointFile(f)
-        x0, Gamma_0, en_zpt = minimumI.vibrational_groundstate()
+            excited_fchk = readers.FormattedCheckpointFile(f)
+        x0, Gamma_0, en_zpt = excited_fchk.vibrational_groundstate()
         # center of initial wavepacket
         q0 = torch.from_numpy(x0)
         # momentum of initial wavepacket
