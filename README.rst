@@ -9,8 +9,8 @@ Milestones
 ----------
 
  * implement Herman-Kluk and Walton-Manolopoulos semiclassical propagators (*done*)
- * compare with exact QM rates for _anharmonic_ adiabatic shift (AS) model with 5,10,...,60 modes
- * compare with exact QM rates for different _harmonic_ models (AH, VH)
+ * compare with exact QM rates for _anharmonic_ adiabatic shift (AS) model with 5 (*done*), 10,...,60 modes
+ * compare with exact QM rates for _harmonic_ model: AH (*done* for methylium with 6 modes, 12 cartesian coordinates)
  * include Herzberg-Teller effect (coordinate dependence of non-adiabatic coupling vectors)
  * implement Hessians for sGDML force field (*done*)
 
@@ -157,7 +157,8 @@ Keywords
    |          ``coupling``
    |
    |             **Description:** Path to formatted checkpoint file with the non-adiabatic coupling
-   |                 vector between the ground and excited state.
+   |                 vector between the ground and excited state. The atomic masses are taken from
+   |                 this file.
    |             **Datatype:** string (path to fchk-file)
 
 

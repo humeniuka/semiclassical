@@ -630,7 +630,7 @@ class MolecularGDMLPotential(_MolecularPotentialBase, object):
       Data for sGDML model fitted to reproduce the ground state potential energy surface.
       It is assumed that the model uses atomic units (bohr for lengths and Hartree for energies).
     nac_fchk  :  FormattedCheckpointFile
-      formatted checkpoint file object with cartesian non-adiabatic coupling vector
+      formatted checkpoint file object with cartesian non-adiabatic coupling vector and atomic masses
     """
     def __init__(self, model_pot, nac_fchk):
         # predict energy, gradient and Hessian of ground state potential
