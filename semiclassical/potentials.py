@@ -7,6 +7,7 @@ __all__ = ['NonHarmonicPotential', 'MorsePotential',
 
 # # Imports
 import torch
+import numpy as np
 import logging
 
 # # Local Imports
