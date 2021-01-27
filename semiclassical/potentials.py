@@ -8,7 +8,6 @@ __all__ = ['NonHarmonicPotential', 'MorsePotential',
 # # Imports
 import torch
 import logging
-from ase.data import atomic_masses
 
 # # Local Imports
 from semiclassical import units
@@ -638,10 +637,13 @@ class MolecularGDMLPotential(_MolecularPotentialBase, object):
         # constant non-adiabatic coupling vector (Condon approximation)
         self.nac0 = torch.from_numpy(nac_fchk.nonadiabatic_coupling())
 
-        assert (model_pot['z'] == nac_fchk.atomic_numbers()).all(), "GDML models for potential energy and NAC vector should be for the same molecule."
-        # mass in atomic units for each cartesian coordinate
-        self._masses = (torch.tensor([atomic_masses[z]*units.amu_to_aumass for z in model_pot['z']])
-                        .repeat(3))
+        logger.info(f"atomic numbers : {model_pot['z']}")
+        
+        assert np.array_equal(model_pot['z'], nac_fchk.atomic_numbers()), "GDML models for potential energy and NAC vector should be for the same molecule."
+        # mass in atomic units for each cartesian coordinate, we use the masses from the
+        # checkpoint file since the atomic masses in ASE differ slightly from those used
+        # by Gaussian.
+        self._masses = torch.from_numpy(nac_fchk.masses())
         self._dim = len(self._masses)
         logger.info(f"atomic masses (multiples of electron mass) : {self._masses}")
         
