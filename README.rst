@@ -119,7 +119,15 @@ the rates can be computed with
    
    $ semi rates input.json
 
-   
+The resulting correlation functions and rates are stored in .npz files.
+They can be converted to .dat files with
+
+.. code-block::
+
+   $ semi plot correlations.npz --export --quiet
+
+which should create a file called `correlations.dat`.
+
 See also the examples for input files at the end.
 
 ============================
