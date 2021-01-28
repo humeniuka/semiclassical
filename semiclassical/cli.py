@@ -370,8 +370,6 @@ def _export_tables(filenames):
         datfile = os.path.splitext(filename)[0]+".dat"
         logger.info(f"exporting correlation functions from '{filename}' to table '{datfile}'")
         # write table with correlation functions to file
-        # NOTE: To compare with the IC-correlation functions produced by FCclasses3, our
-        #       correlation functions have to be divided by a factor of (2*pi).
         with open(datfile, "w") as f:
             f.write('# autoorrelation function\n')
             f.write("# propagator: {propagator}   trajectories: {trajectories}")

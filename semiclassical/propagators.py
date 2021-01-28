@@ -812,9 +812,9 @@ class HermanKlukPropagator(object):
         """
         correlation function for internal conversion rate
         
-          ~                       i/hbar t E_0^(es)              -i/har t H^(gs) 
-          k  (t) = (2 pi)/hbar * e                  <phi(0)|T   e                T   |phi(0)>
-           ic                                                eg                   ge   
+          ~                     i/hbar t E_0^(es)              -i/har t H^(gs) 
+          k  (t) = hbar^{-2} * e                  <phi(0)|T   e                T   |phi(0)>
+           ic                                              eg                   ge   
           
         see equations in `notes/Herman_Kluk_ic_correlation.pdf`
           
@@ -868,7 +868,7 @@ class HermanKlukPropagator(object):
         nacq = n2q + (           torch.einsum('in,ij,jn->n', q0-q, R, n1q)
                       +1j/hbar * torch.einsum('in,in->n',         pi, n1q))
         
-        kic_t_qp =   2*np.pi / hbar \
+        kic_t_qp =  1.0 / hbar**2 \
                    * torch.exp(1j/hbar * self.t * torch.tensor(energy0_es)) \
                    * nacQ * nacq * cauto_qp
             
@@ -1516,9 +1516,9 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         """
         correlation function for internal conversion
         
-          ~                       i/hbar t E_0^(es)              -i/har t H^(gs) 
-          k  (t) = (2 pi)/hbar * e                  <phi(0)|T   e                T   |phi(0)>
-           ic                                                eg                   ge   
+          ~                     i/hbar t E_0^(es)              -i/har t H^(gs) 
+          k  (t) = hbar^{-2} * e                  <phi(0)|T   e                T   |phi(0)>
+           ic                                              eg                   ge   
           
         Parameters
         ----------
@@ -1572,7 +1572,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
                                - torch.einsum('in,jin,jn->n', q0-Q, self.RqQ, n1q)
                       +1j/hbar * torch.einsum('in,in->n',           self.Pq,  n1q))
         # eqn. (100)
-        kic_t_qp =   2*np.pi / hbar \
+        kic_t_qp =   1.0 / hbar**2 \
                    * torch.exp(1j/hbar * self.t * torch.tensor(energy0_es)) \
                    * (nacqQ + nacQ * nacq) * cauto_qp
 

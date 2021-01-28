@@ -229,7 +229,7 @@ class TestSemiclassicalPropagators1D(unittest.TestCase):
 
         logger.info("... propagate interaction-prepared wavepacket V^+\phi(0) in time")
         for t in range(0, nt):
-            ic_correlation_qm[t] = 2*np.pi/hbar * np.exp(1j*times[t]*en0) * np.sum(psi0.conjugate() * psi * dx)
+            ic_correlation_qm[t] = 1.0/hbar**2 * np.exp(1j*times[t]*en0) * np.sum(psi0.conjugate() * psi * dx)
             for i in range(0, m):
                 # split operator step
                 # |psi(t+dt)> = U(dt) |psi(t)> 
@@ -411,7 +411,7 @@ class TestAdiabaticShiftModel(unittest.TestCase):
             B = -nac * torch.sqrt((omega*S)/2) * torch.sign(dQ)
             for t in range(0, self.nt):
                 Xt = S * torch.exp(-1j*omega*self.times[t])
-                self.ic_correlation_qm[t] = ( 2*np.pi/hbar
+                self.ic_correlation_qm[t] = ( 1.0/hbar**2
                                               * torch.prod(torch.exp(-S+Xt))
                                               * (torch.sum(A*Xt+B)**2 + torch.sum(A**2*Xt)) )
 
