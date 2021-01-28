@@ -34,15 +34,15 @@ pytorch=1.8.0 is available from the channel pytorch-nightly
    $ conda install pytorch --channel pytorch-nightly
 
 
-Installation
-------------
+Getting Started
+---------------
 The package is installed by running
 
 .. code-block:: bash
 
    $ pip install -e .
    
-in the top directory. Calculations are run via the command line interface `semi`.
+in the top directory. Calculations are run via the command line interface `semi`:
 
 - running semiclassical dynamics:
 
@@ -50,17 +50,28 @@ in the top directory. Calculations are run via the command line interface `semi`
 
    $ semi dynamics input.json
 
-- plotting correlation functions:
+- computing rates from correlation functions
+
+.. code-block::
+   
+   $ semi rates input.json
+
+- plotting correlation functions and rates:
 
 .. code-block::
 
    $ semi plot correlations.npz
+   
+- exporting correlation functions and rates to .dat file
 
-
-
----------------
-Getting Started
----------------
+.. code-block::
+   
+   $ semi plot correlations.npz -eq
+  
+   
+-------------
+Documentation
+-------------
 
 All calculations are controlled by the settings in a command file which is
 structured using the JSON format.
@@ -73,24 +84,47 @@ Structure of Input File
 
    { "semi" : [
       {
-      	"title" : "internal conversion",
+      	"task" : "dynamics",
 	... keywords ...
       },		
       {		
-	"title" : "internal conversion",
+	"task" : "rates",
 	... keywords ...
       },
       ...
    ]}
 
 
-`title` determines the type of calculation. So far only correlation functions for
-"internal conversion" are implemented. This type of calculation requires the keywords listed below.
+``task`` determines the type of calculation:
+ * **"dynamics"** runs semiclassical dynamics and computes correlation functions.
+ * **"rates"** Fourier transforms these correlation functions to obtain transition rates.
+
+Each type of calculation requires different keywords listed below. Tasks can be run separately, since the computational effort associated with obtaining the correlation function is much larger than computing the rates once the correlation functions are ready.
+
+For instance, one could repeatedly run batches of semiclassical trajectories, until the correlation function is converged (to accumulate results from different runs use `overwrite = false`):
+
+.. code-block::
+   
+   $ semi dynamics input.json
+
+After checking visually that the autocorrelation function equals *C(t=0) = 1*,
+
+.. code-block::
+   
+   $ semi plot correlations.npz
+
+the rates can be computed with
+
+.. code-block::
+   
+   $ semi rates input.json
+
+   
 See also the examples for input files at the end.
 
-========
-Keywords
-========
+============================
+Keywords for "dynamics" task
+============================
     
 .. topic:: ``potential``
 
@@ -222,7 +256,43 @@ Keywords
    | **Datatype:** integer
    | **Default:** None
    | **Recommendation:** Avoid seeding the RNG manually.
-  
+
+   
+=========================
+Keywords for "rates" task
+=========================
+
+.. topic:: ``correlations``
+
+   | **Description:** Converged correlation functions are read from this npz-file.
+   | **Datatype:** string
+   | **Default:** 'correlations.npz'
+
+.. topic:: ``rates``
+
+   | **Description:** Transition rates are written to this npz-file.
+   | **Datatype:** string
+   | **Default:** 'correlations.npz'
+
+.. topic:: ``broadening``
+
+   | **Description:** Lineshape function (*'gaussian'*, *'lorentzian'* or *'voigtian'*)
+   | **Datatype:** string
+   | **Default:** 'gaussian'
+
+.. topic:: ``hwhmG_ev``
+
+   | **Description:** Gaussian width of lineshape function in energy domain (in eV)
+   | **Datatype:** float
+   | **Default:** 0.01
+
+.. topic:: ``hwhmL_ev``
+
+   | **Description:** Lorentzian width of lineshape function in energy domain (in eV)
+   | **Datatype:** float
+   | **Default:** 1.0e-6
+	   
+
 
 --------
 Examples
@@ -236,7 +306,7 @@ with 'anharmonic AS' potential
 
   { "semi" : [
     {
-	"title" : "internal conversion",
+	"task" : "dynamics",
 	"potential" : {
 	    "type"          : "anharmonic AS",
 	    "model_file"    : "AS_model.dat",
@@ -252,6 +322,13 @@ with 'anharmonic AS' potential
 	    "overwrite"         : false
 	},
 	"manual_seed"           : 0
+    },
+    {
+        "task"  : "rates",
+	"broadening"   : "gaussian",
+	"hwhm_ev"      : 0.001,
+	"correlations" : "correlations.npz",
+	"rates"        : "correlations.npz"
     }
   ]}
 
@@ -264,7 +341,7 @@ with 'harmonic' potential
 
   { "semi" : [
     {
-	"title" : "internal conversion",
+	"task" : "dynamics",
 	"potential" : {
 	    "type"      : "harmonic",
 	    "ground"    : "opt_freq_s0.fchk",
@@ -279,6 +356,13 @@ with 'harmonic' potential
 	"results" : {
 	    "correlations"      : "correlations.npz"
 	}
+    },
+    {
+        "task"  : "rates",
+	"broadening"   : "gaussian",
+	"hwhm_ev"      : 0.001,
+	"correlations" : "correlations.npz",
+	"rates"        : "correlations.npz"
     }
   ]}
 
@@ -291,7 +375,7 @@ with 'gdml' potential
 
   { "semi" : [
     {
-	"title" : "internal conversion",
+	"task" : "dynamics",
 	"potential" : {
 	    "type"      : "gdml",
 	    "ground"    : "pot_s0.npz",
@@ -306,6 +390,13 @@ with 'gdml' potential
 	"results" : {
 	    "correlations"      : "correlations.npz"
 	}
+    },
+    {
+        "task"  : "rates",
+	"broadening"   : "gaussian",
+	"hwhm_ev"      : 0.001,
+	"correlations" : "correlations.npz",
+	"rates"        : "correlations.npz"
     }
   ]}
 

@@ -41,7 +41,8 @@ from semiclassical import propagators
 from semiclassical import readers
 from semiclassical import units
 from semiclassical.units import hbar
-
+from semiclassical import broadening
+from semiclassical import rates
 
 # # Logging
 logger = logging.getLogger(__name__)
@@ -65,20 +66,25 @@ def main():
         
     # sub commands
     subparsers = parser.add_subparsers(help='commands', dest='command')
+    
     # - dynamics
     parser_dynamics = subparsers.add_parser(
         'dynamics',
         help="run semiempirical dynamics")
-    parser_dynamics.add_argument('json_input', type=str, metavar='input.json', help='input file in JSON format')
+    parser_dynamics.add_argument('json_input',
+                                 type=str, metavar='input.json', help='input file in JSON format')
     parser_dynamics.add_argument(
         '--cuda',
         type=int, dest='cuda', default=0, metavar='id', 
         help="select id of cuda device if more than one is available, i.e. 0 for 'cuda:0'")
+    
     # - plotting
     parser_plot = subparsers.add_parser(
         'plot',
         help="plot correlation functions from .npz files")
-    parser_plot.add_argument('correlation_files', type=str, metavar='correlation.npz', help='plot correlation functions from one or more npz-files', nargs='+')
+    parser_plot.add_argument('correlation_files',
+                             type=str, metavar='correlation.npz',
+                             help='plot correlation functions from one or more npz-files', nargs='+')
     parser_plot.add_argument('-e',
                              '--export',
                              dest='export_tables',
@@ -89,6 +95,13 @@ def main():
                              dest='quiet',
                              action='store_true',
                              help='do not open window for plotting, only export tables.')
+    
+    # - rates
+    parser_rates = subparsers.add_parser(
+        'rates',
+        help="compute Fermi's Golden Rule transition rates by Fourier transforming correlation functions")
+    parser_rates.add_argument('json_input',
+                              type=str, metavar='input.json', help='input file in JSON format')
     
     args = parser.parse_args()
     
@@ -107,15 +120,28 @@ def main():
             with open(args.json_input) as f:
                 config = json.load(f)
 
+            logger.info(f"run all 'dynamics' tasks in {args.json_input}")
             for task in config['semi']:
-                _run_semiclassical_dynamics(task)
+                if task['task'] == 'dynamics':
+                    _run_semiclassical_dynamics(task)
 
+        elif args.command == 'rates':
+            
+            with open(args.json_input) as f:
+                config = json.load(f)
+
+            logger.info(f"run all 'rates' tasks in {args.json_input}")
+            for task in config['semi']:
+                if task['task'] == 'rates':
+                    _calculate_rates(task)
+
+                    
         elif args.command == 'plot':
             if args.export_tables:
                 _export_tables(args.correlation_files)
             if not args.quiet:
                 _plot_correlation_functions(args.correlation_files)
-            
+                
     except:
         logging.exception("An error occurred, see traceback below")
         
@@ -123,8 +149,6 @@ class ConfigurationError(Exception):
     pass
         
 def _run_semiclassical_dynamics(task):
-    assert task['title'] == "internal conversion"
-    
     # ground state potential and non-adiabatic couplings
     p = task['potential']
     if p['type'] == "harmonic":
@@ -217,7 +241,6 @@ def _run_semiclassical_dynamics(task):
         
         # zero-point energy of the excited state potential
         en_zpt = torch.sum(hbar/2.0 * omega).item()
-
         
     else:
         raise ConfigurationError(f"Unknown potential type in {task['potential']}")
@@ -333,7 +356,7 @@ def _run_semiclassical_dynamics(task):
         autocorrelation = ( repetition*autocorrelation + autocorrelation_ ) / (repetition + 1.0)
         ic_correlation = ic_correlation_
         
-        data = np.load(filename)        
+        data = dict(np.load(filename))
         ntraj_old = data['trajectories']
         ntraj_new = num_samples
         ntraj_tot = ntraj_old + ntraj_new
@@ -342,14 +365,61 @@ def _run_semiclassical_dynamics(task):
 
         # <phi(0)|phi(0> should be equal to 1.0 for a converged autocorrelation function
         logger.info(f"<phi(0)|phi(0)>= {autocorrelation[0]}")
-        
-        np.savez(filename,
-                 propagator=propagator_name,
-                 times=times,
-                 autocorrelation=autocorrelation,
-                 ic_correlation=ic_correlation,
-                 trajectories=ntraj_tot)
 
+        # update data in npz-file
+        data['trajectories'] = ntraj_tot
+        data['autocorrelation'] = autocorrelation
+        data['ic_correlation'] = ic_correlation
+        np.savez(filename, **data)
+
+def _calculate_rates(task):
+    """
+    compute rates by Fourier transforming correlation functions
+    """
+    # widths of broadening functions
+    hwhmG = task.get('hwhmG_ev', 0.01) 
+    hwhmL = task.get('hwhmL_ev', 1.0e-6)
+
+    # convert HWHM to parameters of lineshape functions
+    sigma = hwhmG / np.sqrt(2.0 * np.log(2.0)) / units.hartree_to_ev
+    gamma = hwhmL / units.hartree_to_ev
+    
+    # type of broadening functions
+    broad = task.get('broadening', 'gaussian')
+    if broad == "gaussian":
+        lineshape = broadening.gaussian(sigma)
+    elif broad == "lorentzian":
+        lineshape = broadening.lorentzian(gamma)
+    elif broad == "voigtian":
+        lineshape = broadening.voigtian(sigma, gamma)
+    else:
+        raise ValueError("'broadening' should be one of 'gaussian', 'lorentzian' or 'voigtian'")
+    
+    # read correlation function from this file
+    corr_file = task.get('correlations', 'correlations.npz')
+    # write rates vs. energy to this file
+    rate_file = task.get('rates', 'correlations.npz')
+
+    logger.info(f"compute rates from correlation functions in '{corr_file}'")
+
+    data = dict(np.load(corr_file))
+
+    logger.info(f"trajectories : {data['trajectories']}")
+    logger.info(f"time grid    : tmin= {data['times'].min():.4f} tmax= {data['times'].max():.4f} steps= {len(data['times'])}")
+    
+    data['broadening'] = broad
+    data['hwhmG'] = hwhmG
+    data['hwhmL'] = hwhmL
+
+    energies, ic_rate = rates.internal_conversion_rate(data['times'], data['ic_correlation'], lineshape)
+
+    data['energies'] = energies[energies >= 0.0]
+    data['ic_rate'] = ic_rate[energies >= 0.0].real
+
+    logger.info(f"rates are saved to '{rate_file}'")
+    np.savez(rate_file, **data)
+    
+    
 def _export_tables(filenames):
     """
     save correlation functions to .dat files for plotting with external programmes
@@ -372,8 +442,9 @@ def _export_tables(filenames):
         # write table with correlation functions to file
         with open(datfile, "w") as f:
             f.write('# autoorrelation function\n')
-            f.write("# propagator: {propagator}   trajectories: {trajectories}")
-            f.write('# Time/fs                  Re[C(t)]                 Im[C(t)]\n')
+            f.write(f"# propagator: {propagator}   trajectories: {trajectories}\n")
+            f.write('#\n')
+            f.write('# Time/fs                  Re[C(t)]                  Im[C(t)]\n')
             np.savetxt(f, np.vstack(
                 (data['times'] * units.autime_to_fs,
                  data['autocorrelation'].real,
@@ -381,31 +452,51 @@ def _export_tables(filenames):
             ).T)
             f.write('\n')
             f.write('# IC-correlation function\n')
-            f.write("# propagator: {propagator}   trajectories: {trajectories}")
-            f.write('# Time/fs                  Re[kIC(t)]               Im[kIC(t)]\n')
+            f.write(f"# propagator: {propagator}   trajectories: {trajectories}\n")
+            f.write('#\n')
+            f.write('# Time/fs                  Re[kIC(t)]                Im[kIC(t)]\n')
             np.savetxt(f, np.vstack(
                 (data['times'] * units.autime_to_fs,
                  data['ic_correlation'].real,
                  data['ic_correlation'].imag)
             ).T)
-    
+
+            if 'ic_rate' in data:
+                f.write('\n')
+                f.write('# internal conversion rate\n')
+                f.write(f"# propagator: {propagator}   trajectories: {trajectories}\n")
+                f.write(f"# broadening: {data['broadening']}   HWHM_G: {data['hwhmG']} eV   HWHM_L: {data['hwhmL']} eV\n")
+                f.write('#\n')
+                f.write('# Energy/eV                kIC(E)/s^-1\n')
+                np.savetxt(f, np.vstack(
+                    (data['energies'] * units.hartree_to_ev,
+                     data['ic_rate'].real)
+                    ).T)
+            
     
 def _plot_correlation_functions(filenames):
     """
-    plot autocorrelation and IC correlation loaded from .npz file
+    plot autocorrelation, IC correlation and (if available) transition rates 
+    loaded from .npz file
     """
     import matplotlib.pyplot as plt
 
     plt.figure(figsize=(12.0,6.0))
                
-    ax1 = plt.subplot(1,2,1)
+    ax1 = plt.subplot(1,3,1)
     ax1.set_xlabel("Time / fs")
     ax1.set_ylabel("Autocorrelation")
 
-    ax2 = plt.subplot(1,2,2)
+    ax2 = plt.subplot(1,3,2)
     ax2.set_xlabel("Time / fs")
     ax2.set_ylabel("IC correlation")
 
+    ax3 = plt.subplot(1,3,3)
+    ax3.set_xlabel("Energy / eV")
+    ax3.set_ylabel("IC rate (log) / s$^{-1}$")
+    ax3.set_yscale('log')
+    ax3.set_xlim((0.0,10.0))
+    
     # numbers of trajectories and names of propagators used in each file
     trajectories = []
     propagators = []
@@ -419,6 +510,7 @@ def _plot_correlation_functions(filenames):
         trajectories.append( int(data['trajectories']) )
         propagators.append( str(data['propagator']) )
 
+        # correlation (functions of time)
         lre, = ax1.plot(data['times'] * units.autime_to_fs, data['autocorrelation'].real,
                         ls=linestyle)
         lim, = ax1.plot(data['times'] * units.autime_to_fs, data['autocorrelation'].imag,
@@ -433,6 +525,10 @@ def _plot_correlation_functions(filenames):
                  color=lim.get_color(),
                  label=f"Im[{filename}]")
 
+        # rates (functions of energy)
+        if 'ic_rate' in data:
+            ax3.plot(data['energies'] * units.hartree_to_ev, data['ic_rate'], ls=linestyle)
+        
     plt.suptitle(f"trajectories: {trajectories}, propagators: {propagators}")
     ax2.legend(bbox_to_anchor=(1.05, 1.0))
 
