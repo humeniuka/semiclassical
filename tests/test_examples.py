@@ -34,8 +34,10 @@ class cd:
     def __enter__(self):
         self.old_path = os.getcwd()
         os.chdir(self.new_path)
-    def __exit__(self):
+    def __exit__(self, typ, value, traceback):
+        # return to original CWD
         os.chdir(self.old_path)
+        return True
         
 
 class TestExamples(unittest.TestCase):
@@ -95,10 +97,10 @@ class TestExamples(unittest.TestCase):
                     data = np.load(filename)
 
                     # compare correlation functions
-                    self.assertTrue( np.array_equal(data['autocorrelation'], data_check['autocorrelation']) )
-                    self.assertTrue( np.array_equal(data['ic_correlation'], data_check['ic_correlation']) )
+                    self.assertTrue( np.allclose(data['autocorrelation'], data_check['autocorrelation']) )
+                    self.assertTrue( np.allclose(data['ic_correlation'], data_check['ic_correlation']) )
                     # compare rates
-                    self.assertTrue( np.array_equal(data['ic_rates'], data_check['ic_rates']) )
+                    self.assertTrue( np.allclose(data['ic_rates'], data_check['ic_rates']) )
                     
     def test_all_examples(self):
         logger.info(f"Test all examples in {EXAMPLES_DIR}")

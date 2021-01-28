@@ -135,8 +135,8 @@ class GDMLPredict(nn.Module):
         #  N: number of atoms
         #  D: dimension of descriptor, for Coulomb matrix D = N*(N-1)/2
         #  X: spatial dimensions, 3
-        #  
-
+        #
+        
         # dimensions
         dimN = self._n_atoms
         dimM, dimD = self._Jx_alphas.size()
