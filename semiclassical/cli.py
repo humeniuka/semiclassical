@@ -73,7 +73,7 @@ def main():
     parser_dynamics.add_argument(
         '--cuda',
         type=int, dest='cuda', default=0, metavar='id', 
-        help="select cuda device if more than one is available")
+        help="select id of cuda device if more than one is available, i.e. 0 for 'cuda:0'")
     # - plotting
     parser_plot = subparsers.add_parser(
         'plot',
