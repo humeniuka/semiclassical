@@ -68,5 +68,14 @@ def internal_conversion_rate(times, ic_correlation, lineshape):
     # convert IC rate from atomic units to seconds^-1
     ic_rate *= 1.0e15 / units.autime_to_fs
 
+    # For some reason, we have to multiply the rate by a factor of 4*pi
+    # to get agreement with FCclasses3.
+    # The lineshape function has
+    #   lineshape(t=0) = 1/(2pi)
+    # This explains the factor of (2 pi), since lineshape(t=0) should be 1.
+    # But what about the other factor of 2?
+    # Well, anyway this must be the correct expression.
+    ic_rate *= 2.0 * 2.0*np.pi
+    
     return energies, ic_rate
 
