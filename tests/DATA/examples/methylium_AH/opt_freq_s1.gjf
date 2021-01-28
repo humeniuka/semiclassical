@@ -1,0 +1,14 @@
+%Mem=6Gb
+%Chk=opt_freq_s1.chk
+#p wB97XD/def2SVP
+   TD=(Singlet,Nstate=2,Root=1,NAC)
+   scf(MaxCycle=1000) NoSymm
+   Opt Freq
+
+  optimize on S1 potential, frequencies, S0/S1 NAC vector
+
+1,1
+@geom
+
+
+

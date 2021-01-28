@@ -1,0 +1,28 @@
+{ "semi" : [
+    {
+	"task" : "dynamics",
+	"potential" : {
+	    "type"      : "harmonic",
+	    "ground"    : "opt_freq_s0.fchk",
+	    "excited"   : "opt_freq_s1.fchk",
+	    "coupling"  : "opt_freq_s1.fchk"
+	},
+	"propagator" : "HK",
+	"batch_size"            : 10000,
+	"num_trajectories"      : 50000,
+	"num_steps"             : 2000,
+	"time_step_fs"          : 0.005,
+	"results" : {
+	    "correlations"      : "correlations.npz"
+	},
+	"manual_seed"           : 0
+    },
+    {
+        "task"  : "rates",
+	"broadening"   : "gaussian",
+	"hwhm_ev"      : 0.001,
+	"correlations" : "correlations.npz",
+	"rates"        : "correlations.npz"
+    }
+]
+}

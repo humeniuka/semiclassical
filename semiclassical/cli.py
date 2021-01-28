@@ -109,7 +109,6 @@ def main():
         
         if args.command == 'dynamics':
             # run on GPU or CPU ?
-            global device
             torch.set_default_dtype(torch.float64)
             if torch.cuda.is_available():
                 args.cuda = min(args.cuda, torch.cuda.device_count())
@@ -123,7 +122,7 @@ def main():
             logger.info(f"run all 'dynamics' tasks in {args.json_input}")
             for task in config['semi']:
                 if task['task'] == 'dynamics':
-                    _run_semiclassical_dynamics(task)
+                    run_semiclassical_dynamics(task, device=device)
 
         elif args.command == 'rates':
             
@@ -133,7 +132,7 @@ def main():
             logger.info(f"run all 'rates' tasks in {args.json_input}")
             for task in config['semi']:
                 if task['task'] == 'rates':
-                    _calculate_rates(task)
+                    calculate_rates(task)
 
                     
         elif args.command == 'plot':
@@ -148,7 +147,12 @@ def main():
 class ConfigurationError(Exception):
     pass
         
-def _run_semiclassical_dynamics(task):
+def run_semiclassical_dynamics(task, device='cpu'):
+    """
+    Parameters
+    ----------
+    task  :   JSON structure
+    """
     # ground state potential and non-adiabatic couplings
     p = task['potential']
     if p['type'] == "harmonic":
@@ -372,7 +376,7 @@ def _run_semiclassical_dynamics(task):
         data['ic_correlation'] = ic_correlation
         np.savez(filename, **data)
 
-def _calculate_rates(task):
+def calculate_rates(task):
     """
     compute rates by Fourier transforming correlation functions
     """

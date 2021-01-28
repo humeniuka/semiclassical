@@ -1,0 +1,13 @@
+%Mem=6Gb
+%Chk=opt_freq_s0.chk
+#p wB97XD/def2SVP
+   scf(MaxCycle=1000) NoSymm
+   Opt=Tight Freq
+
+  optimize on S0 potential, frequencies
+
+1,1
+@geom
+
+
+
