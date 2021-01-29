@@ -253,8 +253,9 @@ def run_semiclassical_dynamics(task, device='cpu'):
     # We start at the minimum of the initial potential and follow the gradient on
     # the final potential until the minimum is found. All energies are measured with
     # respect to the minimum energy.
-    logger.info("find minimum on final potential energy surface")
-    potential.minimize(q0)
+    if hasattr(potential, "minimize"):
+        logger.info("find minimum on final potential energy surface")
+        potential.minimize(q0)
     
     Gamma_i = Gamma_0
     Gamma_t = Gamma_0
