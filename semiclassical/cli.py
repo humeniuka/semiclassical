@@ -451,7 +451,7 @@ def _export_tables(filenames):
         logger.info(f"exporting correlation functions from '{filename}' to table '{datfile}'")
         # write table with correlation functions to file
         with open(datfile, "w") as f:
-            f.write('# autoorrelation function\n')
+            f.write('# autocorrelation function\n')
             f.write(f"# propagator: {propagator}   trajectories: {trajectories}\n")
             f.write('#\n')
             f.write('# Time/fs                  Re[C(t)]                  Im[C(t)]\n')
