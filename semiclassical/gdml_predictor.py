@@ -83,7 +83,7 @@ class GDMLPredict(nn.Module):
 
         self.perm_idxs = perm_idxs
         self.n_perms = n_perms
-
+        
     @property
     def device(self):
         """
