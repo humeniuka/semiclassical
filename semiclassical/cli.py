@@ -78,10 +78,18 @@ def main():
         type=int, dest='cuda', default=0, metavar='id', 
         help="select id of cuda device if more than one is available, i.e. 0 for 'cuda:0'")
     
+    # - rates
+    parser_rates = subparsers.add_parser(
+        'rates',
+        help="compute Fermi's Golden Rule transition rates by Fourier transforming correlation functions")
+    parser_rates.add_argument('json_input',
+                              type=str, metavar='input.json', help='input file in JSON format')
+
+    
     # - plotting
     parser_plot = subparsers.add_parser(
         'plot',
-        help="plot correlation functions from .npz files")
+        help="plot correlation and rate functions from .npz files or export them to .dat files for plotting with an external program")
     parser_plot.add_argument('correlation_files',
                              type=str, metavar='correlation.npz',
                              help='plot correlation functions from one or more npz-files', nargs='+')
@@ -95,13 +103,15 @@ def main():
                              dest='quiet',
                              action='store_true',
                              help='do not open window for plotting, only export tables.')
-    
-    # - rates
-    parser_rates = subparsers.add_parser(
-        'rates',
-        help="compute Fermi's Golden Rule transition rates by Fourier transforming correlation functions")
-    parser_rates.add_argument('json_input',
-                              type=str, metavar='input.json', help='input file in JSON format')
+
+    # - show
+    parser_show = subparsers.add_parser(
+        'show',
+        help="show information about .npz file")
+    parser_show.add_argument('correlation_file',
+                             type=str, metavar='correlation.npz',
+                             help='show information about this .npz file')
+
     
     args = parser.parse_args()
     
@@ -133,13 +143,15 @@ def main():
             for task in config['semi']:
                 if task['task'] == 'rates':
                     calculate_rates(task)
-
                     
         elif args.command == 'plot':
             if args.export_tables:
                 _export_tables(args.correlation_files)
             if not args.quiet:
                 _plot_correlation_functions(args.correlation_files)
+
+        elif args.command == 'show':
+            _show_information(args.correlation_file)
                 
     except:
         logging.exception("An error occurred, see traceback below")
@@ -546,5 +558,18 @@ def _plot_correlation_functions(filenames):
     plt.tight_layout()
     plt.show()
 
+def _show_information(filename):
+    """
+    Show what is in the .npz file
+    """
+    data = np.load(filename)
+    print(f"""
+    filename              : {filename}
+    propagator            : {data['propagator']}
+    trajectories          : {data['trajectories']:10}
+    time step (fs)        : {(data['times'][1]-data['times'][0])*units.autime_to_fs:10.4f}
+    propagation time (fs) : {max(data['times'])*units.autime_to_fs:10.4f}
+    """)
+    
 if __name__ == "__main__":
     main()
