@@ -32,8 +32,7 @@ class UniformOverlapDistribution(object):
         self.dim = dim
         # surface are of unit sphere in dim dimensions
         #  S_{dim-1}(r=1)
-        self.unit_sphere_area = torch.tensor(
-            2.0 * np.pi**(dim/2) / special.gamma(dim/2)  ).to(device)
+        self.unit_sphere_area = 2.0 * np.pi**(dim/2) / special.gamma(dim/2)
 
         # normal distributions for `dim` random variables with mean = 0, std = 1
         self.normal = torch.distributions.Normal(torch.zeros(dim).to(device),

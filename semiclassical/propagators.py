@@ -6,13 +6,16 @@ __all__ = ['HermanKlukPropagator', 'WaltonManolopoulosPropagator']
 
 # # Imports
 import torch
+"""
 from torch.distributions.multivariate_normal import MultivariateNormal
+"""
 
 import numpy as np   # defines np.pi
 import logging
 
 # # Local Imports
 from semiclassical.units import hbar
+from semiclassical.distributions import UniformOverlapDistribution
 
 # small float, threshold for considering singular values as 0
 ZERO = 1.0e-8
@@ -423,9 +426,14 @@ class HermanKlukPropagator(object):
         
     def initial_conditions(self, q0, p0, Gamma_0, ntraj=5000):
         """
-        sample initial positions qi and momenta pi from the normalized probability distribution
+        sample initial positions qi and momenta pi from a probability distribution P(qi,pi)
+
+        The distribution is defined by requiring that frozen Gaussians centered at randomly 
+        sampled phase space position (qi,pi) ~ P(qi,pi) have overlaps with the initial wavepacket,
         
-          P(qi,pi) ~ |<qi,pi,Gamma_i|q0,p0,Gamma_0>|
+          o_i = |<qi,pi,Gamma_i|q0,p0,Gamma_0>|,
+
+        which are distributed uniformly over the interval [0,1)
           
         The initial Gaussian wavefunction centered at `q0` with initial momentum `p0`is
           
@@ -502,15 +510,14 @@ class HermanKlukPropagator(object):
         detLz = torch.prod(torch.sqrt(wq[non_zero_q]/ wp[non_zero_p]))
 
         # x = Lz^T . (z - z0)
-        # sample from standard normal distribution ~ exp(-1/2 x^T x)
-        distribution = MultivariateNormal(
-            torch.zeros(2*num_non_zero).double().to(device),    # center
-            torch.eye(2*num_non_zero).double().to(device)       # covariance
-        ) 
         
-        # sample initial positions and momenta from normal distribution
-        xi = distribution.sample((ntraj,)).T
-        
+        # Instead of sampling from the standard normal distribution ~ exp(-1/2 x^T x)
+        # we sample from a distribution such that the overlaps between the frozen Gaussians
+        # and the initial wavepacket, o = exp(-1/2 x^T x), are distributed uniformly
+        # in the interval [0,1)
+        distribution = UniformOverlapDistribution(2*num_non_zero, device=device)
+        xi = distribution.sample(ntraj)
+
         # transform back to zi = z0 + (Lz^{-1})^T . xi
         zi = z0.unsqueeze(1) + torch.einsum('ji,jn->in', iLz, xi)
 
@@ -521,7 +528,12 @@ class HermanKlukPropagator(object):
         # The wavefunction is assembled by Monte Carlo integration over the initial values.
         # The normalization constants are the probabilities for sampling each of the initial
         # values.
-        #
+
+        # P(qi,pi) probability of sampling (qi,pi)
+        # det(Lz) comes from variable transformation x = L^T . (z-z0)
+        #  P(x) dx = P(x) det(L) dz    =>   P(z) = det(L) P(x) 
+        probi = detLz * distribution.probability(xi)
+
         # Strictly speaking, the normalization constant should contain the factor
         # 1/(2 pi)^num_non_zero instead of 1/(2 pi)^dim, since the distribution is for a reduce space
         # with num_non_zero < dim dimensions. In all expressions of the form
@@ -530,24 +542,19 @@ class HermanKlukPropagator(object):
         #    / (2 pi hbar)^dim
         # where one sums over initial values, the number of dimensions dim should be replaced
         # by non_num_zero, the number of dimensions which have non-zero normal mode frequencies.
-        # Since the factors in the normalization and the volume element cancel in the end,
-        # we leave the expression as 1/(2 pi)^dim.
-        #
-
-        # det(Lz) comes from variable transformation x = L^T . (z-z0)
-        #  P(x) dx = P(x) det(L) dz    =>   P(z) = det(L) P(x) 
-        norm_fac = detLz/(2*np.pi)**d
-        # P(qi,pi) probability of sampling (qi,pi)
-        probi = norm_fac * torch.exp(-0.5 * torch.einsum('in,in->n', xi,xi))
+        # To avoid having to change `dim` in other places, we divide the probabilities by
+        #    (2 pi)^(dim-num_non_zero)
+        # so that the additional factors of (2 pi) in the volume element are cancelled.
+        probi = probi / (2*np.pi)**(d-num_non_zero)
         
-        # compare expected center and covariance of normal distribution with
-        # mean and standard deviation of samples
+        # compare expected center with mean of samples and show their standard deviation
         logger.info("== Initial Conditions ==")
         logger.info(f"number of dimensions   :  {d}")
         logger.info(f"zero dimensions        :  {d-num_non_zero}")
         logger.info(f"number of trajectories :  {n}")
-        logger.info(f"cov(q)= {torch.diag(iLq.T @ iLq)} \t std(q)^2= {torch.std(qi,1)**2}")
-        logger.info(f"cov(p)= {torch.diag(iLp.T @ iLp)} \t std(p)^2= {torch.std(pi,1)**2}")
+        logger.info(f"std(q)^2= {torch.std(qi,1)**2}")
+        logger.info(f"std(p)^2= {torch.std(pi,1)**2}")
+
         logger.info(f"q0= {q0} \t <q>= {torch.mean(qi,1)}  ")
         logger.info(f"p0= {p0} \t <p>= {torch.mean(pi,1)}  ")
         logger.info("")
