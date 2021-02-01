@@ -29,7 +29,7 @@ class UniformOverlapDistribution(object):
         device :  str
           device ('cpu' or 'cuda:#') where random numbers should be sampled
         """
-        self.dim = dim
+        self.dim = int(dim)
         # surface are of unit sphere in dim dimensions
         #  S_{dim-1}(r=1)
         self.unit_sphere_area = torch.as_tensor(
