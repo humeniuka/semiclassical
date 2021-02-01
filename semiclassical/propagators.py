@@ -515,7 +515,7 @@ class HermanKlukPropagator(object):
         # we sample from a distribution such that the overlaps between the frozen Gaussians
         # and the initial wavepacket, o = exp(-1/2 x^T x), are distributed uniformly
         # in the interval [0,1)
-        distribution = UniformOverlapDistribution(2*num_non_zero, device=device)
+        distribution = UniformOverlapDistribution(2*int(num_non_zero), device=device)
         xi = distribution.sample(ntraj)
 
         # transform back to zi = z0 + (Lz^{-1})^T . xi
