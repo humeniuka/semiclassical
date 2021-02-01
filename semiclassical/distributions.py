@@ -112,3 +112,10 @@ class UniformOverlapDistribution(object):
 
         return prob
 
+
+class MultivariateNormalDistribution(object):
+    pass
+
+class RadialGaussianDistribution(object):
+    pass
+

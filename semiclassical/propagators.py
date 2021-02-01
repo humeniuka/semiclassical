@@ -424,7 +424,9 @@ class HermanKlukPropagator(object):
         # \Gamma_t^{1/2} and \Gamma_t^{-1/2}
         self.sqGt, self.isqGt = _sym_sqrtm(Gamma_t)
         
-    def initial_conditions(self, q0, p0, Gamma_0, ntraj=5000):
+    def initial_conditions(self, q0, p0, Gamma_0,
+                           ntraj=5000,
+                           distribution_cls=UniformOverlapDistribution):
         """
         sample initial positions qi and momenta pi from a probability distribution P(qi,pi)
 
@@ -456,6 +458,8 @@ class HermanKlukPropagator(object):
         --------
         ntraj        :  int
           number of trajectories for which initial positions and momenta are sampled
+        distribution :  class from semiclassical.distributions
+          probability distribution (a class not an instance) for sampling initial conditions
         """
         assert Gamma_0.size() == self.Gamma_i.size(), "Width parameter matrix Gamma_0 has wrong dimensions."
         assert _is_symmetric_non_negative(Gamma_0), "Gamma_0 has to be symmetric and positive semi-definite."
@@ -510,12 +514,11 @@ class HermanKlukPropagator(object):
         detLz = torch.prod(torch.sqrt(wq[non_zero_q]/ wp[non_zero_p]))
 
         # x = Lz^T . (z - z0)
+
+        # x is sampled from a spherically symmetric distribution
         
-        # Instead of sampling from the standard normal distribution ~ exp(-1/2 x^T x)
-        # we sample from a distribution such that the overlaps between the frozen Gaussians
-        # and the initial wavepacket, o = exp(-1/2 x^T x), are distributed uniformly
-        # in the interval [0,1)
-        distribution = UniformOverlapDistribution(2*int(num_non_zero), device=device)
+        # Instantiate distribution from class
+        distribution = distribution_cls(2*int(num_non_zero), device=device)
         xi = distribution.sample(ntraj)
 
         # transform back to zi = z0 + (Lz^{-1})^T . xi
