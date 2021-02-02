@@ -32,6 +32,7 @@ import os.path
 import numpy as np
 import torch
 import ase
+import ase.io.extxyz
 import tqdm
 
 # Local imports
@@ -188,6 +189,9 @@ def run_semiclassical_dynamics(task, device='cpu'):
         # frozen Gaussian are equal to vibrational ground state
         Gamma_0 = torch.from_numpy(Gamma_0)
 
+        # molecule corresponding to this potential (only needed for visualization)
+        atoms = ase.atoms.Atoms(numbers=excited_fchk['Atomic numbers'])
+        
     elif p['type'] == "gdml":
         # ground state potential and non-adiabatic coupling
         model_pot = np.load(p['ground'], allow_pickle=True)
@@ -207,6 +211,9 @@ def run_semiclassical_dynamics(task, device='cpu'):
 
         # frozen Gaussian are equal to vibrational ground state
         Gamma_0 = torch.from_numpy(Gamma_0)
+
+        # molecule corresponding to this potential (only needed for visualization)
+        atoms = ase.atoms.Atoms(numbers=excited_fchk['Atomic numbers'])
 
     elif p['type'] == "anharmonic AS":
         model_file = p['model_file']
@@ -258,7 +265,9 @@ def run_semiclassical_dynamics(task, device='cpu'):
         
         # zero-point energy of the excited state potential
         en_zpt = torch.sum(hbar/2.0 * omega).item()
-        
+
+        # not a molecular potential
+        atoms = None
     else:
         raise ConfigurationError(f"Unknown potential type in {task['potential']}")
 
@@ -358,6 +367,25 @@ def run_semiclassical_dynamics(task, device='cpu'):
                                       ntraj=num_samples,
                                       distribution_cls=distribution_cls)
 
+        # for molecular potentials, export initial coordinates and momenta for visualization
+        if not atoms is None:
+            # This option is only for debugging purposes.
+            xyz_file = task.get('export_initial', '')
+            if xyz_file != '':
+                qi,pi = propagator.initial_positions_and_momenta()
+                _, ntraj = qi.size()
+                atoms_list = []
+                for i in range(0, ntraj):
+                    atoms_ = atoms.copy()
+                    atoms_.set_positions(qi[:,i].reshape(-1,3) * units.bohr_to_angs)
+                    atoms_.set_momenta(pi[:,i].reshape(-1,3))
+                    atoms_list.append(atoms_)
+                ase.io.extxyz.write_extxyz(xyz_file, atoms_list,
+                                           columns=['symbols', 'positions', 'momenta'],
+                                           write_results=False)
+                logger.info(f"initial positions and momenta saved to '{xyz_file}'")
+                
+        # run semiclassical dynamics
         with tqdm.tqdm(total=nt) as progress_bar:
             for t in range(0, nt):
                 autocorrelation_[t] += propagator.autocorrelation()
