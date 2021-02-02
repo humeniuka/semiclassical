@@ -191,6 +191,8 @@ def run_semiclassical_dynamics(task, device='cpu'):
 
         # molecule corresponding to this potential (only needed for visualization)
         atoms = ase.atoms.Atoms(numbers=excited_fchk['Atomic numbers'])
+        atoms.set_positions(q0.numpy().reshape(-1,3) * units.bohr_to_angs)
+        atoms.set_momenta(p0.numpy().reshape(-1,3))
         
     elif p['type'] == "gdml":
         # ground state potential and non-adiabatic coupling
@@ -214,7 +216,9 @@ def run_semiclassical_dynamics(task, device='cpu'):
 
         # molecule corresponding to this potential (only needed for visualization)
         atoms = ase.atoms.Atoms(numbers=excited_fchk['Atomic numbers'])
-
+        atoms.set_positions(q0.numpy().reshape(-1,3) * units.bohr_to_angs)
+        atoms.set_momenta(p0.numpy().reshape(-1,3))
+        
     elif p['type'] == "anharmonic AS":
         model_file = p['model_file']
         anharmonicity = p['anharmonicity']
@@ -362,7 +366,7 @@ def run_semiclassical_dynamics(task, device='cpu'):
         distribution_cls = getattr(distributions,
                                    task.get('distribution', 'UniformOverlapDistribution') )
         
-        # initial conditions
+        # sample initial conditions
         propagator.initial_conditions(q0, p0, Gamma_0,
                                       ntraj=num_samples,
                                       distribution_cls=distribution_cls)
@@ -372,10 +376,12 @@ def run_semiclassical_dynamics(task, device='cpu'):
             # This option is only for debugging purposes.
             xyz_file = task.get('export_initial', '')
             if xyz_file != '':
+                # first geometry is the equilibrium structure
+                atoms_list = [atoms]
+                # remaining geometries are random samples
                 qi,pi = (qp.cpu() for qp in
                          propagator.initial_positions_and_momenta())
                 _, ntraj = qi.size()
-                atoms_list = []
                 for i in range(0, ntraj):
                     atoms_ = atoms.copy()
                     atoms_.set_positions(qi[:,i].reshape(-1,3) * units.bohr_to_angs)
