@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 """probability distributions for sampling initial conditions"""
+
+__all__ = ['UniformOverlapDistribution', 'MultivariateNormalDistribution', 'UnitBallFillingDistribution']
+
+# # Imports
 import torch
 import numpy as np
 from scipy import special
@@ -8,7 +12,7 @@ from scipy import special
 class UniformOverlapDistribution(object):
     def __init__(self, dim, device='cpu'):
         """
-        draw vectors x from R^dim such that the radial parts
+        draw points x from R^dim such that the radial parts
         |x| are distributed according to
 
               o = exp(-1/2 |x|^2)
@@ -114,8 +118,128 @@ class UniformOverlapDistribution(object):
 
 
 class MultivariateNormalDistribution(object):
-    pass
+    def __init__(self, dim, device='cpu'):
+        """
+        draw points x from R^dim with probability
 
-class RadialGaussianDistribution(object):
-    pass
+          P(x) = (2 pi)^(-dim/2) exp(-1/2 x^T.x)
+
+        Parameters
+        ----------
+        dim   :   int
+          dimension of space
+
+        Optional
+        --------
+        device :  str
+          device ('cpu' or 'cuda:#') where random numbers should be sampled
+        """
+        self.dim = dim
+        # normal distributions for `dim` random variables with mean = 0, std = 1
+        self.normal = torch.distributions.Normal(torch.zeros(dim).to(device),
+                                                 torch.ones(dim).to(device))
+    def sample(self, n):
+        """
+        draw samples from distribution 
+
+        Parameters
+        ----------
+        n     :   int
+          number of samples
+
+        Returns
+        -------
+        x     :   Tensor (dim, n)
+          randomly sampled points
+        """
+        x = self.normal.sample((n,)).T
+        return x
+
+    def probability(self, x):
+        """
+        compute the probability P(x) for sampling x
+
+        Parameters
+        ----------
+        x     :   Tensor (dim, n)
+          sampled points
+        
+        Returns
+        -------
+        prob  :   Tensor (n,)
+          probabilities for sampling points, prob[i] = P(x[i])
+        """
+        dim, n = x.size()
+        assert self.dim == dim, f"Points `x` have wrong dimension, expected {self.dim}, got {dim}."
+
+        prob = (2.0*np.pi)**(-dim/2) * torch.exp(-1/2 * torch.sum(x*x, 0))
+        
+        return prob
+
+    
+class UnitBallFillingDistribution(object):
+    def __init__(self, dim, device='cpu'):
+        """
+        draw points x from R^dim with probability
+
+          P(x) = (dim/(2 pi))^(dim/2) exp(-1/2 dim x^T.x)
+
+        This distribution has the property, that independently of the number of
+        dimensions dim, no less than 50% of the samples will lie inside the unit
+        ball (|x| < 1 for half of the samples). The volume of the unit ball skrinks
+        with increasing dimensions so that the distribution becomes more and more
+        peaked around the origin.
+
+        Parameters
+        ----------
+        dim   :   int
+          dimension of space
+
+        Optional
+        --------
+        device :  str
+          device ('cpu' or 'cuda:#') where random numbers should be sampled
+        """
+        self.dim = dim
+        # normal distributions for `dim` random variables with mean = 0, std = 1/sqrt(dim)
+        self.normal = torch.distributions.Normal(torch.zeros(dim).to(device),
+                                                 torch.sqrt(torch.tensor(1/dim)).expand(dim).to(device))
+
+    def sample(self, n):
+        """
+        draw samples from distribution 
+
+        Parameters
+        ----------
+        n     :   int
+          number of samples
+
+        Returns
+        -------
+        x     :   Tensor (dim, n)
+          randomly sampled points
+        """
+        x = self.normal.sample((n,)).T
+        return x
+
+    def probability(self, x):
+        """
+        compute the probability P(x) for sampling x
+
+        Parameters
+        ----------
+        x     :   Tensor (dim, n)
+          sampled points
+        
+        Returns
+        -------
+        prob  :   Tensor (n,)
+          probabilities for sampling points, prob[i] = P(x[i])
+        """
+        dim, n = x.size()
+        assert self.dim == dim, f"Points `x` have wrong dimension, expected {self.dim}, got {dim}."
+
+        prob = (dim/(2.0*np.pi))**(dim/2) * torch.exp(-1/2 * dim * torch.sum(x*x, 0))
+        
+        return prob
 

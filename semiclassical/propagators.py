@@ -6,16 +6,12 @@ __all__ = ['HermanKlukPropagator', 'WaltonManolopoulosPropagator']
 
 # # Imports
 import torch
-"""
-from torch.distributions.multivariate_normal import MultivariateNormal
-"""
-
 import numpy as np   # defines np.pi
 import logging
 
 # # Local Imports
 from semiclassical.units import hbar
-from semiclassical.distributions import UniformOverlapDistribution
+from semiclassical import distributions
 
 # small float, threshold for considering singular values as 0
 ZERO = 1.0e-8
@@ -426,7 +422,7 @@ class HermanKlukPropagator(object):
         
     def initial_conditions(self, q0, p0, Gamma_0,
                            ntraj=5000,
-                           distribution_cls=UniformOverlapDistribution):
+                           distribution_cls=distributions.MultivariateNormalDistribution):
         """
         sample initial positions qi and momenta pi from a probability distribution P(qi,pi)
 
@@ -516,7 +512,7 @@ class HermanKlukPropagator(object):
         # x = Lz^T . (z - z0)
 
         # x is sampled from a spherically symmetric distribution
-        
+        logger.info(f"distribution function for initial conditions :  {distribution_cls.__name__}")     
         # Instantiate distribution from class
         distribution = distribution_cls(2*int(num_non_zero), device=device)
         xi = distribution.sample(ntraj)
