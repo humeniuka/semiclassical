@@ -96,12 +96,13 @@ class TestExamples(unittest.TestCase):
                     # compare content of .npz files
                     data_check = np.load(filename_check)
                     data = np.load(filename)
-
+                    
                     # compare correlation functions
-                    self.assertTrue( np.allclose(data['autocorrelation'], data_check['autocorrelation']) )
-                    self.assertTrue( np.allclose(data['ic_correlation'], data_check['ic_correlation']) )
-                    # compare rates
-                    self.assertTrue( np.allclose(data['ic_rates'], data_check['ic_rates']) )
+                    self.assertTrue( np.allclose(data['autocorrelation'], data_check['autocorrelation'], atol=0.03 * abs(data_check['autocorrelation']).max() ) )
+                    self.assertTrue( np.allclose(data['ic_correlation'], data_check['ic_correlation'], atol=0.03 * abs(data_check['ic_correlation']).max() ) )
+                    # compare rates, we only check the value at the maximum
+                    imax = np.argmax(data_check['ic_rate'])
+                    self.assertTrue( abs(data_check['ic_rate'][imax] - data['ic_rate'][imax]) < 0.03 * abs(data['ic_rate'][imax]) )
                     
     def test_all_examples(self):
         logger.info(f"Test all examples in {EXAMPLES_DIR}")
