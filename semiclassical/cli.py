@@ -372,7 +372,8 @@ def run_semiclassical_dynamics(task, device='cpu'):
             # This option is only for debugging purposes.
             xyz_file = task.get('export_initial', '')
             if xyz_file != '':
-                qi,pi = propagator.initial_positions_and_momenta()
+                qi,pi = (qp.cpu() for qp in
+                         propagator.initial_positions_and_momenta())
                 _, ntraj = qi.size()
                 atoms_list = []
                 for i in range(0, ntraj):
