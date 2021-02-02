@@ -34,10 +34,10 @@ class cd:
     def __enter__(self):
         self.old_path = os.getcwd()
         os.chdir(self.new_path)
+        return self.new_path
     def __exit__(self, typ, value, traceback):
         # return to original CWD
         os.chdir(self.old_path)
-        return True
         
 
 class TestExamples(unittest.TestCase):
@@ -92,7 +92,8 @@ class TestExamples(unittest.TestCase):
             for filename_check in glob.glob("*.CHECK"):
                 filename, _ = os.path.splitext(filename_check)
                 if filename.endswith(".npz"):
-                    # compare content of .npz file
+                    logger.info(f"compare contents of {filename} and {filename_check}")
+                    # compare content of .npz files
                     data_check = np.load(filename_check)
                     data = np.load(filename)
 

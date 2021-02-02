@@ -365,8 +365,8 @@ def run_semiclassical_dynamics(task, device='cpu'):
         # distribution function for Monte-Carlo integration over initial values
         distribution_cls = getattr(distributions,
                                    #task.get('distribution', 'UniformOverlapDistribution') )
-                                   #task.get('distribution', 'MultivariateNormalDistribution') )
-                                   task.get('distribution', 'UnitBallFillingDistribution') )
+                                   task.get('distribution', 'MultivariateNormalDistribution') )
+                                   #task.get('distribution', 'UnitBallFillingDistribution') )
         
         # sample initial conditions
         propagator.initial_conditions(q0, p0, Gamma_0,
