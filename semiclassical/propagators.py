@@ -11,7 +11,6 @@ import logging
 
 # # Local Imports
 from semiclassical.units import hbar
-from semiclassical import distributions
 
 # small float, threshold for considering singular values as 0
 ZERO = 1.0e-8
@@ -421,18 +420,18 @@ class HermanKlukPropagator(object):
         self.sqGt, self.isqGt = _sym_sqrtm(Gamma_t)
         
     def initial_conditions(self, q0, p0, Gamma_0,
-                           ntraj=5000,
-                           distribution_cls=distributions.MultivariateNormalDistribution):
+                           ntraj=5000):
         """
-        sample initial positions qi and momenta pi from a probability distribution P(qi,pi)
+        sample initial positions qi and momenta pi from a multivariate normal
+        probability distribution P(qi,pi)
 
-        The distribution is defined by requiring that frozen Gaussians centered at randomly 
-        sampled phase space position (qi,pi) ~ P(qi,pi) have overlaps with the initial wavepacket,
+        The probability for sampling the phase space point (qi,pi) is proportional to the
+        modulus squared of the overlap of a frozen Gaussian centered at this point with the
+        initial Gaussian wavepacket at (q0,p0):
         
-          o_i = |<qi,pi,Gamma_i|q0,p0,Gamma_0>|,
+          P(qi,pi) ~ |<qi,pi,Gamma_i|q0,p0,Gamma_0>|^2
 
-        which are distributed uniformly over the interval [0,1)
-          
+
         The initial Gaussian wavefunction centered at `q0` with initial momentum `p0`is
           
           phi(x,t=0) = <x|q0,p0,Gamma_0>
@@ -454,8 +453,6 @@ class HermanKlukPropagator(object):
         --------
         ntraj        :  int
           number of trajectories for which initial positions and momenta are sampled
-        distribution :  class from semiclassical.distributions
-          probability distribution (a class not an instance) for sampling initial conditions
         """
         assert Gamma_0.size() == self.Gamma_i.size(), "Width parameter matrix Gamma_0 has wrong dimensions."
         assert _is_symmetric_non_negative(Gamma_0), "Gamma_0 has to be symmetric and positive semi-definite."
@@ -479,19 +476,19 @@ class HermanKlukPropagator(object):
         
         iGi0 = torch.einsum('ij,j,kj->ik', Vp[:,non_zero_p], 1.0/wp[non_zero_p], Vp[:,non_zero_p])
     
-        # [Gi+G0]^{-1} can also be expressed as Lp.Lp^T
-        #Lp = torch.einsum('ij,j->ij', Vp[:,non_zero_p], 1.0/torch.sqrt(wp[non_zero_p]))
+        # 2 * [Gi+G0]^{-1} can also be expressed as Lp.Lp^T
+        #Lp = torch.einsum('ij,j->ij', Vp[:,non_zero_p], torch.sqrt(2/wp[non_zero_p]))
         # pseudoinverse Lp^{-1}
-        iLp = torch.einsum('i,ji->ij', torch.sqrt(wp[non_zero_p]), Vp[:,non_zero_p])
+        iLp = torch.einsum('i,ji->ij', torch.sqrt(wp[non_zero_p]/2), Vp[:,non_zero_p])
     
         # form Gi [Gi+G0]^{-1} G0 and diagonalize
         wq,Vq = torch.symeig(Gi @ iGi0 @ G0, eigenvectors=True)
         non_zero_q = wq > ZERO
 
-        # Gi [Gi+G0]^{-1} G0 can be expressed as Lq.Lq^T
-        #Lq = torch.einsum('ij,j->ij', Vq[:,non_zero_q], torch.sqrt(wq[non_zero_q]))
+        # 2 * Gi [Gi+G0]^{-1} G0 can be expressed as Lq.Lq^T
+        #Lq = torch.einsum('ij,j->ij', Vq[:,non_zero_q], torch.sqrt(2*wq[non_zero_q]))
         # pseudoinverse Lq^{-1}
-        iLq = torch.einsum('i,ji->ij', 1.0/torch.sqrt(wq[non_zero_q]), Vq[:,non_zero_q])
+        iLq = torch.einsum('i,ji->ij', 1.0/torch.sqrt(2*wq[non_zero_q]), Vq[:,non_zero_q])
 
         assert torch.count_nonzero(wp > ZERO) == torch.count_nonzero(wq > ZERO), "number of non-zero modes for sampling of positions and momenta have to be the same"
         num_non_zero = torch.count_nonzero(wp > ZERO)
@@ -507,15 +504,15 @@ class HermanKlukPropagator(object):
         iLz = torch.block_diag(iLq, iLp)
         # pseudo determinant of Lz
         # det(Lz) = det(Lq) det(Lp) = product of ratios of non-zero eigenvalues of Lq and Lp
-        detLz = torch.prod(torch.sqrt(wq[non_zero_q]/ wp[non_zero_p]))
+        detLz = torch.prod(2*torch.sqrt(wq[non_zero_q]/wp[non_zero_p]))
 
         # x = Lz^T . (z - z0)
 
-        # x is sampled from a spherically symmetric distribution
-        logger.info(f"distribution function for initial conditions :  {distribution_cls.__name__}")     
-        # Instantiate distribution from class
-        distribution = distribution_cls(2*int(num_non_zero), device=device)
-        xi = distribution.sample(ntraj)
+        # x is sampled from a multivariate normal distribution
+        # x ~ 1/(2 pi)^d * exp(-1/2 x^2)   ,   x in Reals^(2d)
+        normal = torch.distributions.Normal(torch.zeros(2*num_non_zero).to(device),
+                                            torch.ones(2*num_non_zero).to(device))
+        xi = normal.sample((ntraj,)).T
 
         # transform back to zi = z0 + (Lz^{-1})^T . xi
         zi = z0.unsqueeze(1) + torch.einsum('ji,jn->in', iLz, xi)
@@ -531,7 +528,7 @@ class HermanKlukPropagator(object):
         # P(qi,pi) probability of sampling (qi,pi)
         # det(Lz) comes from variable transformation x = L^T . (z-z0)
         #  P(x) dx = P(x) det(L) dz    =>   P(z) = det(L) P(x) 
-        probi = detLz * distribution.probability(xi)
+        probi = detLz/(2*np.pi)**d * torch.exp(-0.5 *  torch.einsum('in,in->n', xi,xi))
 
         # Strictly speaking, the normalization constant should contain the factor
         # 1/(2 pi)^num_non_zero instead of 1/(2 pi)^dim, since the distribution is for a reduce space
@@ -541,19 +538,17 @@ class HermanKlukPropagator(object):
         #    / (2 pi hbar)^dim
         # where one sums over initial values, the number of dimensions dim should be replaced
         # by non_num_zero, the number of dimensions which have non-zero normal mode frequencies.
-        # To avoid having to change `dim` in other places, we divide the probabilities by
-        #    (2 pi)^(dim-num_non_zero)
-        # so that the additional factors of (2 pi) in the volume element are cancelled.
-        probi = probi / (2*np.pi)**(d-num_non_zero)
-        
-        # compare expected center with mean of samples and show their standard deviation
+        # Since the factors in the normalization and the volume element cancel in the end,
+        # we leave the expression as 1/(2 pi)^dim.
+
+        # compare expected center and covariance of normal distribution with
+        # mean and standard deviation of samples
         logger.info("== Initial Conditions ==")
         logger.info(f"number of dimensions   :  {d}")
         logger.info(f"zero dimensions        :  {d-num_non_zero}")
         logger.info(f"number of trajectories :  {n}")
-        logger.info(f"std(q)^2= {torch.std(qi,1)**2}")
-        logger.info(f"std(p)^2= {torch.std(pi,1)**2}")
-
+        logger.info(f"cov(q)= {torch.diag(iLq.T @ iLq)} \t std(q)^2= {torch.std(qi,1)**2}")
+        logger.info(f"cov(p)= {torch.diag(iLp.T @ iLp)} \t std(p)^2= {torch.std(pi,1)**2}")
         logger.info(f"q0= {q0} \t <q>= {torch.mean(qi,1)}  ")
         logger.info(f"p0= {p0} \t <p>= {torch.mean(pi,1)}  ")
         logger.info("")

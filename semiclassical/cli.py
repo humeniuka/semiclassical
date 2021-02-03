@@ -44,7 +44,6 @@ from semiclassical import units
 from semiclassical.units import hbar
 from semiclassical import broadening
 from semiclassical import rates
-from semiclassical import distributions
 
 # # Logging
 logger = logging.getLogger(__name__)
@@ -361,17 +360,10 @@ def run_semiclassical_dynamics(task, device='cpu'):
 
         # correlation function for internal conversion
         ic_correlation_ = np.zeros((nt,), dtype=complex)
-
-        # distribution function for Monte-Carlo integration over initial values
-        distribution_cls = getattr(distributions,
-                                   #task.get('distribution', 'UniformOverlapDistribution') )
-                                   task.get('distribution', 'MultivariateNormalDistribution') )
-                                   #task.get('distribution', 'UnitBallFillingDistribution') )
         
         # sample initial conditions
         propagator.initial_conditions(q0, p0, Gamma_0,
-                                      ntraj=num_samples,
-                                      distribution_cls=distribution_cls)
+                                      ntraj=num_samples)
 
         # for molecular potentials, export initial coordinates and momenta for visualization
         if not atoms is None:
