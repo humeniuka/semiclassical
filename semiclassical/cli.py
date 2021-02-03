@@ -285,7 +285,7 @@ def run_semiclassical_dynamics(task, device='cpu'):
         adiabatic_gap = excited_fchk.total_energy() - potential.total_energy()
     else:
         # for model potentials the energy gap is not defined
-        adiabatic_gap = None
+        adiabatic_gap = np.nan
         
     Gamma_i = Gamma_0
     Gamma_t = Gamma_0
