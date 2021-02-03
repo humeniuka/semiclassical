@@ -227,7 +227,7 @@ class CoherentStatesOverlap(object):
         qj, pj = qj.unsqueeze(1).expand(-1,ni,-1), pj.unsqueeze(1).expand(-1,ni,-1)
         
         # prefactor from normalization
-        fac = torch.sqrt(2.0**self.rank * torch.sqrt(self.detGi*self.detGj) / self.detGij)
+        fac = torch.sqrt(2.0**self.rank * torch.sqrt(self.detGi) * torch.sqrt(self.detGj) / self.detGij)
         
         olap = fac * torch.exp(
             -0.5         * torch.einsum('aij,ab,bij->ij', qj-qi, self.Gi_iGij_Gj, qj-qi)
@@ -1509,7 +1509,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         # C   (t) = |------------- C   (t)  =  1/(2 pi hbar)^d *  sum  C (t)    / (n * P(qi,pi))
         #  auto     /(2 pi hbar)^d  auto                             i  auto
         #
-        cauto = torch.sum(cauto_qp/(self.ntraj * self.probi)) /  (2*np.pi*hbar)**self.dim
+        cauto = torch.sum(cauto_qp/(self.ntraj * self.probi * (2*np.pi*hbar)**self.dim))
     
         return cauto.item()
     
@@ -1578,7 +1578,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
                    * (nacqQ + nacQ * nacq) * cauto_qp
 
         # integrate over initial conditions with appropriate weights from Monte-Carlo integration
-        kic_t = torch.sum(kic_t_qp/(self.ntraj * self.probi)) /  (2*np.pi*hbar)**self.dim
+        kic_t = torch.sum(kic_t_qp/(self.ntraj * self.probi * (2*np.pi*hbar)**self.dim))
 
         return kic_t.item()
 
