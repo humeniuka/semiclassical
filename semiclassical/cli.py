@@ -337,7 +337,7 @@ def run_semiclassical_dynamics(task, device='cpu'):
                  trajectories=0)
     else:
         assert task.get('manual_seed', None) is None, \
-            "Multiple runs with the same sequence of random numbers make no sense!"
+            "Multiple runs with the same sequence of random numbers make no sense! Do not use `manual_seed` and `overwrite=False` at the same time"
         
         # check that existing data is compatible compatible with this dynamics run
         data = np.load(filename)
