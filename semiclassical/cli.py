@@ -336,6 +336,9 @@ def run_semiclassical_dynamics(task, device='cpu'):
                  adiabatic_gap=adiabatic_gap,
                  trajectories=0)
     else:
+        assert task.get('manual_seed', None) is None, \
+            "Multiple runs with the same sequence of random numbers make no sense!"
+        
         # check that existing data is compatible compatible with this dynamics run
         data = np.load(filename)
         assert np.array_equal(data['times'], times.numpy()), \
@@ -347,6 +350,8 @@ def run_semiclassical_dynamics(task, device='cpu'):
     # make random numbers reproducible if desired
     seed = task.get('manual_seed', None)
     if not seed is None:
+        logger.warning("The random number generator should not be seeded manually unless for debugging!")
+        logger.warning("Sequences of random numbers will be identical between different runs.")
         torch.manual_seed(seed)
 
     # run semiclassical dynamics 
@@ -372,25 +377,7 @@ def run_semiclassical_dynamics(task, device='cpu'):
                                       ntraj=num_samples)
 
         # for molecular potentials, export initial coordinates and momenta for visualization
-        if not atoms is None:
-            # This option is only for debugging purposes.
-            xyz_file = task.get('export_initial', '')
-            if xyz_file != '':
-                # first geometry is the equilibrium structure
-                atoms_list = [atoms]
-                # remaining geometries are random samples
-                qi,pi = (qp.cpu() for qp in
-                         propagator.initial_positions_and_momenta())
-                _, ntraj = qi.size()
-                for i in range(0, ntraj):
-                    atoms_ = atoms.copy()
-                    atoms_.set_positions(qi[:,i].reshape(-1,3) * units.bohr_to_angs)
-                    atoms_.set_momenta(pi[:,i].reshape(-1,3))
-                    atoms_list.append(atoms_)
-                ase.io.extxyz.write_extxyz(xyz_file, atoms_list,
-                                           columns=['symbols', 'positions', 'momenta'],
-                                           write_results=False)
-                logger.info(f"initial positions and momenta saved to '{xyz_file}'")
+        _export_trajectories_extxyz(task.get('export_initial', ''), atoms, propagator)
                 
         # run semiclassical dynamics
         with tqdm.tqdm(total=nt) as progress_bar:
@@ -398,28 +385,36 @@ def run_semiclassical_dynamics(task, device='cpu'):
                 autocorrelation_[t] += propagator.autocorrelation()
                 ic_correlation_[t] += propagator.ic_correlation(potential, energy0_es=en_zpt)
 
+                # If any NaN's are detected the simulation is aborted.
+                assert not np.isnan(autocorrelation).any(), f"encountered NaN's in autocorrelation : {autocorrelation}"
+                assert not np.isnan(ic_correlation).any(), f"encountered NaN's in IC correlation : {ic_autocorrelation}"
+                                
+                
                 progress_bar.set_description(f" ({repetition+1:6}/{num_repetitions:6}) {t+1:6}/{nt:6}   time= {times[t]:10.4f}   time/fs= {times[t]*units.autime_to_fs:10.4f}")
                 progress_bar.update(1)
 
                 propagator.step(potential, dt)
 
-        # running average
+        # for molecular potentials, export final coordinates and momenta for visualization
+        _export_trajectories_extxyz(task.get('export_final', ''), atoms, propagator)
+                
+        # add averages from different repetitions
         #
-        # F(n) = 1/n sum_i=1^n f(i)
+        #                    i=n+m
+        #  F(n:n+m) = 1/m sum     f(i)
+        #                    i=n
         #
-        # F(n+1) = 1/(n+1) sum_i=1^{n+1} f(i)
+        #                        i=m+n
+        #  F(1:n+m) = 1/(m+n) sum      f(i) = ( n * F(1:n) + m * F(n:n+m) ) / (m+n)
+        #                        i=1
         #
-        #        = 1/(n+1) (n*F(n) + f(n+1))
-        #
-        autocorrelation = ( repetition*autocorrelation + autocorrelation_ ) / (repetition + 1.0)
-        ic_correlation = ic_correlation_
         
         data = dict(np.load(filename))
         ntraj_old = data['trajectories']
         ntraj_new = num_samples
         ntraj_tot = ntraj_old + ntraj_new
-        autocorrelation = (ntraj_new * autocorrelation + ntraj_old * data['autocorrelation'])/ntraj_tot
-        ic_correlation  = (ntraj_new * ic_correlation  + ntraj_old * data['ic_correlation'] )/ntraj_tot
+        autocorrelation = (ntraj_new * autocorrelation_ + ntraj_old * data['autocorrelation'])/ntraj_tot
+        ic_correlation  = (ntraj_new * ic_correlation_  + ntraj_old * data['ic_correlation'] )/ntraj_tot
 
         # C(t=0) = <phi(0)|phi(0> should be be exactly 1 because the initial conditions are sampled
         # from the normalized distribution function P(qi,pi) ~ |<qi,pi|q0,p0>|^2
@@ -439,6 +434,39 @@ def run_semiclassical_dynamics(task, device='cpu'):
         
         np.savez(filename, **data)
 
+def _export_trajectories_extxyz(filename, atoms, propagator):
+    """
+    save current positions and momenta in extended XYZ format
+
+    Parameters
+    ----------
+    filename   :  str
+      xyz output file
+    propagator :  HermanKlukPropagator or WaltonManolopoulosPropagator
+      provides coordinates and momenta 
+    atoms      :  instance of ase.atoms.Atoms
+      molecule with equilibrium structure
+    """
+    if filename == '':
+        return
+    if atoms is None:
+        return
+    # first geometry is the equilibrium structure
+    atoms_list = [atoms]
+    # remaining geometries are random samples
+    q,p = (qp.cpu() for qp in
+           propagator.current_positions_and_momenta())
+    _, ntraj = q.size()
+    for i in range(0, ntraj):
+        atoms_ = atoms.copy()
+        atoms_.set_positions(q[:,i].reshape(-1,3) * units.bohr_to_angs)
+        atoms_.set_momenta(p[:,i].reshape(-1,3))
+        atoms_list.append(atoms_)
+        ase.io.extxyz.write_extxyz(filename, atoms_list,
+                                   columns=['symbols', 'positions', 'momenta'],
+                                   write_results=False)
+    logger.info(f"positions and momenta saved to '{filename}'")
+        
 def calculate_rates(task):
     """
     compute rates by Fourier transforming correlation functions

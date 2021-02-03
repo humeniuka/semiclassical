@@ -84,7 +84,7 @@ class TestCoherentStates(unittest.TestCase):
         # check <qi,pi,Gi|qi,pi,Gi> = 1        
         cso = CoherentStatesOverlap(Gi,Gi)
         olap = cso(qi,pi, qi,pi)
-        self.assertEqual(olap.squeeze().item(), 1.0)
+        self.assertTrue( abs(olap.squeeze().item()-1.0) < 1.0e-5 )
     def test_zero_modes(self):
         """overlaps when width parameter matrix Gamma is singular"""
         # make random numbers reproducible
