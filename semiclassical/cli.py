@@ -279,7 +279,14 @@ def run_semiclassical_dynamics(task, device='cpu'):
     if hasattr(potential, "minimize"):
         logger.info("find minimum on final potential energy surface")
         potential.minimize(q0)
-    
+
+    if p['type'] in ["harmonic", "gdml"]:
+        # For molecular potentials compute adiabatic excitation energy
+        adiabatic_gap = excited_fchk.total_energy() - potential.total_energy()
+    else:
+        # for model potentials the energy gap is not defined
+        adiabatic_gap = None
+        
     Gamma_i = Gamma_0
     Gamma_t = Gamma_0
 
@@ -326,6 +333,7 @@ def run_semiclassical_dynamics(task, device='cpu'):
                  times=times,
                  autocorrelation=autocorrelation,
                  ic_correlation=ic_correlation,
+                 adiabatic_gap=adiabatic_gap,
                  trajectories=0)
     else:
         # check that existing data is compatible compatible with this dynamics run
@@ -419,13 +427,15 @@ def run_semiclassical_dynamics(task, device='cpu'):
         #                    /                                          /
         #  <phi(0)|phi(0)> = | dqi dpi   <q0,p0|qi,pi><qi,pi|q0,p0>   = | P(qi,pi) dqi dpi = 1/n sum P(x)/P(x) = 1
         #                    /                                          /                        x~P
-
-        logger.info(f"<phi(0)|phi(0)>= {autocorrelation[0]}")
+        assert abs(autocorrelation[0] - 1.0) < 1.0e-5
 
         # update data in npz-file
         data['trajectories'] = ntraj_tot
         data['autocorrelation'] = autocorrelation
         data['ic_correlation'] = ic_correlation
+        # The IC rates are not up-to-date anymore, so remove them
+        data.pop('ic_rate', None)
+        
         np.savez(filename, **data)
 
 def calculate_rates(task):
@@ -604,12 +614,21 @@ def _show_information(filename):
     """
     data = np.load(filename)
     print(f"""
-    filename              : {filename}
-    propagator            : {data['propagator']}
-    trajectories          : {data['trajectories']:10}
-    time step (fs)        : {(data['times'][1]-data['times'][0])*units.autime_to_fs:10.4f}
-    propagation time (fs) : {max(data['times'])*units.autime_to_fs:10.4f}
+    filename               : {filename}
+    propagator             : {data['propagator']}
+    trajectories           : {data['trajectories']:10}
+    time step (fs)         : {(data['times'][1]-data['times'][0])*units.autime_to_fs:10.4f}
+    propagation time (fs)  : {max(data['times'])*units.autime_to_fs:10.4f}
     """)
+    if 'ic_rate' in data:
+        # read off IC rate at point closest to adiabatic excitation energy
+        iclosest = np.argmin(abs(data['energies'] - data['adiabatic_gap']))
+        kic = data['ic_rate'][iclosest]
+        print(f"""
+    adiabatic gap Ead (eV) : {data['adiabatic_gap']*units.hartree_to_ev:6.3f}
+    IC rate kic(Ead) (s-1) : {kic:3.2e}
+        """)
+
     
 if __name__ == "__main__":
     main()

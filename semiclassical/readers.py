@@ -374,6 +374,7 @@ class FormattedCheckpointFile(object):
         mass = self.data["Real atomic weights"] * units.amu_to_aumass
         mass = np.repeat(mass, 3)
         return mass
+    
     def atomic_numbers(self):
         """
         atomic numbers 
@@ -384,3 +385,12 @@ class FormattedCheckpointFile(object):
           atomic number for each atom
         """
         return self.data["Atomic numbers"]
+
+    def total_energy(self):
+        """
+        Returns
+        -------
+        energy :  float
+          total energy of state of interest in Hartree
+        """
+        return self.data["Total Energy"]

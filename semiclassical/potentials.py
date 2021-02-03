@@ -414,6 +414,17 @@ class _MolecularPotentialBase(object):
         """
         return self._masses
 
+    def total_energy(self):
+        """
+        total energy at minimum (after calling minimize(...))
+
+        Returns
+        -------
+        energy  :  float
+          energy at minimum in Hartree
+        """
+        return self._origin
+    
     def minimize(self, r_guess, maxiter=10000, rtol=1.0e-5, gtol=1.0e-8):
         """
         find the local minimum of the potential energy surface in the vicinity
