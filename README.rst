@@ -68,7 +68,14 @@ in the top directory. Calculations are run via the command line interface `semi`
    
    $ semi export correlations.npz
   
+- show content of .npz file and IC rates at the adiabatic excitation energy
+
+.. code-block::
+
+   $ semi show correlations.npz
+
    
+
 -------------
 Documentation
 -------------
