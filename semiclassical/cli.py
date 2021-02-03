@@ -90,22 +90,19 @@ def main():
     # - plotting
     parser_plot = subparsers.add_parser(
         'plot',
-        help="plot correlation and rate functions from .npz files or export them to .dat files for plotting with an external program")
+        help="plot correlation and rate functions from .npz files")
     parser_plot.add_argument('correlation_files',
                              type=str, metavar='correlation.npz',
                              help='plot correlation functions from one or more npz-files', nargs='+')
-        
-    parser_plot.add_argument('-e',
-                             '--export',
-                             dest='export_tables',
-                             action='store_true',
-                             help='export auto- and IC-correlation functions to tables, the output filenames are determined by stripping the .npz suffix from the input files and replacing it with .dat .')
-    parser_plot.add_argument('-q',
-                             '--quiet',
-                             dest='quiet',
-                             action='store_true',
-                             help='do not open window for plotting, only export tables.')
-
+    
+    # - export
+    parser_export = subparsers.add_parser(
+        'export',
+        help="export correlation functions and rates from .npz file to .dat files for plotting with external program, produces the tables 'autocorrelation.dat', 'ic_correlation.dat' (and 'ic_rate.dat' if available).")
+    parser_export.add_argument('correlation_file',
+                               type=str, metavar='correlation.npz',
+                               help='export data from this .npz file')
+    
     # - show
     parser_show = subparsers.add_parser(
         'show',
@@ -147,11 +144,11 @@ def main():
                     calculate_rates(task)
                     
         elif args.command == 'plot':
-            if args.export_tables:
-                _export_tables(args.correlation_files)
-            if not args.quiet:
-                _plot_correlation_functions(args.correlation_files)
+            _plot_correlation_functions(args.correlation_files)
 
+        elif args.command == 'export':
+            _export_tables(args.correlation_file)
+                
         elif args.command == 'show':
             _show_information(args.correlation_file)
                 
@@ -485,58 +482,59 @@ def calculate_rates(task):
     np.savez(rate_file, **data)
     
     
-def _export_tables(filenames):
+def _export_tables(filename):
     """
     save correlation functions to .dat files for plotting with external programmes
 
-    The output filenames are determined by stripping the ".npz" suffix
-    from the input files and replacing it with ".dat".
+    The output filenames are 
+     *  autocorrelation.dat
+     *  ic_correlation.dat
+     *  ic_rate.dat         (if the rates have been computed)
 
     Parameters
     ----------
-    filenames  :  names of .npz files
-      contain correlation functions
+    filename  :  name of .npz file
+      contains correlation functions
     """
-    for ifile, filename in enumerate(filenames):
-        data = np.load(filename)
-        trajectories = int(data['trajectories'])
-        propagator = str(data['propagator'])
+    data = np.load(filename)
+    trajectories = int(data['trajectories'])
+    propagator = str(data['propagator'])
         
-        datfile = os.path.splitext(filename)[0]+".dat"
-        logger.info(f"exporting correlation functions from '{filename}' to table '{datfile}'")
-        # write table with correlation functions to file
-        with open(datfile, "w") as f:
-            f.write('# autocorrelation function\n')
+    datfile = os.path.splitext(filename)[0]+".dat"
+    logger.info(f"exporting correlation functions from '{filename}' to tables 'autocorrelation.dat' and 'ic_correlation.dat'")
+    # write table with correlation functions to file
+    with open("autocorrelation.dat", "w") as f:
+        f.write('# autocorrelation function\n')
+        f.write(f"# propagator: {propagator}   trajectories: {trajectories}\n")
+        f.write('#\n')
+        f.write('# Time/fs                  Re[C(t)]                  Im[C(t)]\n')
+        np.savetxt(f, np.vstack(
+            (data['times'] * units.autime_to_fs,
+             data['autocorrelation'].real,
+             data['autocorrelation'].imag)
+        ).T)
+    with open("ic_correlation.dat", "w") as f:
+        f.write('# IC-correlation function\n')
+        f.write(f"# propagator: {propagator}   trajectories: {trajectories}\n")
+        f.write('#\n')
+        f.write('# Time/fs                  Re[kIC(t)]                Im[kIC(t)]\n')
+        np.savetxt(f, np.vstack(
+            (data['times'] * units.autime_to_fs,
+             data['ic_correlation'].real,
+             data['ic_correlation'].imag)
+        ).T)
+    if 'ic_rate' in data:
+        logger.info(f"exporting IC rates from '{filename}' to tables 'ic_rate.dat'")
+        with open("ic_rate.dat", "w") as f:
+            f.write('# internal conversion rate\n')
             f.write(f"# propagator: {propagator}   trajectories: {trajectories}\n")
+            f.write(f"# broadening: {data['broadening']}   HWHM_G: {data['hwhmG']} eV   HWHM_L: {data['hwhmL']} eV\n")
             f.write('#\n')
-            f.write('# Time/fs                  Re[C(t)]                  Im[C(t)]\n')
+            f.write('# Energy/eV                kIC(E)/s^-1\n')
             np.savetxt(f, np.vstack(
-                (data['times'] * units.autime_to_fs,
-                 data['autocorrelation'].real,
-                 data['autocorrelation'].imag)
+                (data['energies'] * units.hartree_to_ev,
+                 data['ic_rate'].real)
             ).T)
-            f.write('\n')
-            f.write('# IC-correlation function\n')
-            f.write(f"# propagator: {propagator}   trajectories: {trajectories}\n")
-            f.write('#\n')
-            f.write('# Time/fs                  Re[kIC(t)]                Im[kIC(t)]\n')
-            np.savetxt(f, np.vstack(
-                (data['times'] * units.autime_to_fs,
-                 data['ic_correlation'].real,
-                 data['ic_correlation'].imag)
-            ).T)
-
-            if 'ic_rate' in data:
-                f.write('\n')
-                f.write('# internal conversion rate\n')
-                f.write(f"# propagator: {propagator}   trajectories: {trajectories}\n")
-                f.write(f"# broadening: {data['broadening']}   HWHM_G: {data['hwhmG']} eV   HWHM_L: {data['hwhmL']} eV\n")
-                f.write('#\n')
-                f.write('# Energy/eV                kIC(E)/s^-1\n')
-                np.savetxt(f, np.vstack(
-                    (data['energies'] * units.hartree_to_ev,
-                     data['ic_rate'].real)
-                    ).T)
             
     
 def _plot_correlation_functions(filenames):

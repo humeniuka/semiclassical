@@ -62,11 +62,11 @@ in the top directory. Calculations are run via the command line interface `semi`
 
    $ semi plot correlations.npz
    
-- exporting correlation functions and rates to .dat file
+- exporting correlation functions and rates to .dat files
 
 .. code-block::
    
-   $ semi plot correlations.npz -eq
+   $ semi export correlations.npz
   
    
 -------------
@@ -124,9 +124,9 @@ They can be converted to .dat files with
 
 .. code-block::
 
-   $ semi plot correlations.npz --export --quiet
+   $ semi export correlations.npz
 
-which should create a file called `correlations.dat`.
+which should create the files called `autocorrelation.dat`, `ic_correlation.dat` and `ic_rate.dat`.
 
 See also the examples for input files at the end.
 
