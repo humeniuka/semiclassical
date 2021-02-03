@@ -621,13 +621,18 @@ def _show_information(filename):
     propagation time (fs)  : {max(data['times'])*units.autime_to_fs:10.4f}
     """)
     if 'ic_rate' in data:
-        # read off IC rate at point closest to adiabatic excitation energy
-        iclosest = np.argmin(abs(data['energies'] - data['adiabatic_gap']))
-        kic = data['ic_rate'][iclosest]
+        if not np.isnan(data['adiabatic_gap']):
+            # read off IC rate at point closest to adiabatic excitation energy
+            iclosest = np.argmin(abs(data['energies'] - data['adiabatic_gap']))
+            kic = data['ic_rate'][iclosest]
+        else:
+            kic = np.nan
         print(f"""
     adiabatic gap Ead (eV) : {data['adiabatic_gap']*units.hartree_to_ev:6.3f}
-    IC rate kic(Ead) (s-1) : {kic:3.2e}
+    IC rate kic(Ead) (s-1) : {kic:6.3e}
         """)
+    else:
+        print("  No rates found in file, you have to compute them first with the command 'semi rates'.")
 
     
 if __name__ == "__main__":

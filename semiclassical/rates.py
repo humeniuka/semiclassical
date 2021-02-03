@@ -55,11 +55,13 @@ def rate_from_correlation(times, correlation, lineshape):
     times_ = np.linspace(-t_max, t_max, 2*nt-1)
     # energy sample points for \Delta E
     energies = fft.fftfreq(2*nt-1) * (2*nt-1)/(2*t_max) * 2.0*np.pi
-
+    
     # k(t) for positive and negative times
     correlation_ = np.zeros(2*nt-1, dtype=complex)
-    correlation_[0.0 <= times_] = correlation
-    correlation_[times_  < 0.0] = correlation[1:].conj()
+    # k(0 <= t)
+    correlation_[int((2*nt-1)/2):] = correlation
+    # k(t < 0) = k(0 < t)^*
+    correlation_[:int((2*nt-1)/2)] = correlation[1:].conj()
 
     # Fourier transform of broadening function is the lineshape
     lineshape_t = lineshape(times_)
