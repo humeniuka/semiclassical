@@ -94,6 +94,7 @@ def main():
     parser_plot.add_argument('correlation_files',
                              type=str, metavar='correlation.npz',
                              help='plot correlation functions from one or more npz-files', nargs='+')
+        
     parser_plot.add_argument('-e',
                              '--export',
                              dest='export_tables',
@@ -292,9 +293,9 @@ def run_semiclassical_dynamics(task, device='cpu'):
     t_max = nt*dt
     times = torch.linspace(0.0, t_max, nt)
 
-    logger.info(f"  time step                                 : {dt*units.autime_to_fs} fs")
+    logger.info(f"  time step                                 : {dt*units.autime_to_fs:.5f} fs")
     logger.info(f"  number of time steps                      : {nt}")
-    logger.info(f"  propagation time                          : {t_max*units.autime_to_fs} fs")
+    logger.info(f"  propagation time                          : {t_max*units.autime_to_fs:.5f} fs")
     
     
     # The trajectories are run in parallel in batches.
@@ -415,7 +416,13 @@ def run_semiclassical_dynamics(task, device='cpu'):
         autocorrelation = (ntraj_new * autocorrelation + ntraj_old * data['autocorrelation'])/ntraj_tot
         ic_correlation  = (ntraj_new * ic_correlation  + ntraj_old * data['ic_correlation'] )/ntraj_tot
 
-        # <phi(0)|phi(0> should be equal to 1.0 for a converged autocorrelation function
+        # C(t=0) = <phi(0)|phi(0> should be be exactly 1 because the initial conditions are sampled
+        # from the normalized distribution function P(qi,pi) ~ |<qi,pi|q0,p0>|^2
+        #
+        #                    /                                          /
+        #  <phi(0)|phi(0)> = | dqi dpi   <q0,p0|qi,pi><qi,pi|q0,p0>   = | P(qi,pi) dqi dpi = 1/n sum P(x)/P(x) = 1
+        #                    /                                          /                        x~P
+
         logger.info(f"<phi(0)|phi(0)>= {autocorrelation[0]}")
 
         # update data in npz-file

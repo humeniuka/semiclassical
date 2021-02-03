@@ -291,9 +291,21 @@ class TestSemiclassicalPropagators1D(unittest.TestCase):
                 logger.info("time= %8.5f   time/T= %5.3f" % (self.times[t], self.times[t]*self.omega/(2*np.pi)))
             propagator.step(self.potential, self.dt)
 
+        ### DEBUG
+        print("autocorrelation QM")
+        print(self.autocorrelation_qm)
+        print("autocorrelation SEMI")
+        print(autocorrelation)
+
+        import matplotlib.pyplot as plt
+        plt.plot(self.ic_correlation_qm.real)
+        plt.plot(ic_correlation.real)
+        plt.show()
+        ###
+            
         # compare semiclassical correlation functions with QM results
-        self.assertTrue(np.isclose(autocorrelation, self.autocorrelation_qm, rtol=0.05).all())
-        self.assertTrue(np.isclose(ic_correlation, self.ic_correlation_qm, rtol=0.1).all())
+        self.assertTrue(np.allclose(autocorrelation, self.autocorrelation_qm, rtol=0.05))
+        self.assertTrue(np.allclose(ic_correlation, self.ic_correlation_qm, rtol=0.1))
 
         # check norm of wavefunction is ~ 1 at last time step
         norm = propagator.norm()
