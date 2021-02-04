@@ -153,7 +153,12 @@ def main():
             _show_information(args.correlation_file)
                 
     except:
-        logging.exception("An error occurred, see traceback below")
+        logging.exception("""
+        An error occurred, see traceback below
+
+        Suggestions:
+         * If there is insufficient memory, decrease 'batch_size'.
+        """)
         
 class ConfigurationError(Exception):
     pass
@@ -377,7 +382,8 @@ def run_semiclassical_dynamics(task, device='cpu'):
                                       ntraj=num_samples)
 
         # for molecular potentials, export initial coordinates and momenta for visualization
-        _export_trajectories_extxyz(task.get('export_initial', ''), atoms, propagator)
+        _export_trajectories_extxyz(task.get('export_initial', ''), atoms, propagator,
+                                    append=(repetition > 0))
                 
         # run semiclassical dynamics
         with tqdm.tqdm(total=nt) as progress_bar:
@@ -395,7 +401,8 @@ def run_semiclassical_dynamics(task, device='cpu'):
                 propagator.step(potential, dt)
 
         # for molecular potentials, export final coordinates and momenta for visualization
-        _export_trajectories_extxyz(task.get('export_final', ''), atoms, propagator)
+        _export_trajectories_extxyz(task.get('export_final', ''), atoms, propagator,
+                                    append=(repetition > 0))
                 
         # add averages from different repetitions
         #
@@ -433,7 +440,7 @@ def run_semiclassical_dynamics(task, device='cpu'):
         
         np.savez(filename, **data)
 
-def _export_trajectories_extxyz(filename, atoms, propagator):
+def _export_trajectories_extxyz(filename, atoms, propagator, append=False):
     """
     save current positions and momenta in extended XYZ format
 
@@ -445,14 +452,22 @@ def _export_trajectories_extxyz(filename, atoms, propagator):
       provides coordinates and momenta 
     atoms      :  instance of ase.atoms.Atoms
       molecule with equilibrium structure
+
+    Optional
+    --------
+    append     :  bool
+      If append is set to True, the file is for append (mode 'a'), 
+      otherwise it is overwritten (mode 'w')
     """
     if filename == '':
         return
     if atoms is None:
         return
-    # first geometry is the equilibrium structure
-    atoms_list = [atoms]
-    # remaining geometries are random samples
+    atoms_list = []
+    if not append:
+        # first geometry is the equilibrium structure
+        atoms_list.append(atoms)
+    # remaining geometries are the trajectories
     q,p = (qp.cpu() for qp in
            propagator.current_positions_and_momenta())
     _, ntraj = q.size()
@@ -461,9 +476,9 @@ def _export_trajectories_extxyz(filename, atoms, propagator):
         atoms_.set_positions(q[:,i].reshape(-1,3) * units.bohr_to_angs)
         atoms_.set_momenta(p[:,i].reshape(-1,3))
         atoms_list.append(atoms_)
-        ase.io.extxyz.write_extxyz(filename, atoms_list,
-                                   columns=['symbols', 'positions', 'momenta'],
-                                   write_results=False)
+    ase.io.extxyz.write_extxyz(filename, atoms_list,
+                               columns=['symbols', 'positions', 'momenta'],
+                               write_results=False, append=append)
     logger.info(f"positions and momenta saved to '{filename}'")
         
 def calculate_rates(task):
