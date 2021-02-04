@@ -157,6 +157,7 @@ def main():
         An error occurred, see traceback below
 
         Suggestions:
+         * Check the JSON input file for mistakes.
          * If there is insufficient memory, decrease 'batch_size'.
         """)
         
@@ -288,6 +289,7 @@ def run_semiclassical_dynamics(task, device='cpu'):
     if p['type'] in ["harmonic", "gdml"]:
         # For molecular potentials compute adiabatic excitation energy
         adiabatic_gap = excited_fchk.total_energy() - potential.total_energy()
+        logger.info(f"  adiabatic excitation energy               : {adiabatic_gap*units.hartree_to_ev:.4f} eV")
     else:
         # for model potentials the energy gap is not defined
         adiabatic_gap = np.nan

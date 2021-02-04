@@ -475,7 +475,8 @@ class HermanKlukPropagator(object):
         self.U = Vp[:,non_zero_p].type(torch.complex128)
         
         iGi0 = torch.einsum('ij,j,kj->ik', Vp[:,non_zero_p], 1.0/wp[non_zero_p], Vp[:,non_zero_p])
-    
+        self.iGi0 = iGi0
+        
         # 2 * [Gi+G0]^{-1} can also be expressed as Lp.Lp^T
         #Lp = torch.einsum('ij,j->ij', Vp[:,non_zero_p], torch.sqrt(2/wp[non_zero_p]))
         # pseudoinverse Lp^{-1}
@@ -585,16 +586,6 @@ class HermanKlukPropagator(object):
         self.q0 = q0
         self.p0 = p0
         self.Gamma_0 = Gamma_0
-
-        # TODO: The following quantities are only needed by the Walton-Manolopoulos propagator
-        # and should be moved into that class. 
-        # pseudo-inverse of Gamma_0
-        w0,V0 = torch.symeig(Gamma_0, eigenvectors=True)
-        non_zero_0 = w0 > ZERO
-        # self.iGamma_0 = torch.inverse(Gamma_0)
-        self.iGamma_0 = torch.einsum('ij,j,kj->ik', V0[:,non_zero_0], 1.0/w0[non_zero_0], V0[:,non_zero_0])
-        self.detGi0 = torch.prod(wp[wp > ZERO])
-        self.iGi0 = iGi0
         
         # number of trajectories
         self.ntraj = ntraj
@@ -607,18 +598,26 @@ class HermanKlukPropagator(object):
         # semiclassical prefactor
         self.c = torch.ones(n, dtype=torch.complex128).to(device)
 
-        # for overlaps and wavefunctions
-        self.csoi0 = CoherentStatesOverlap(self.Gamma_i, self.Gamma_0)
-        self.csot0 = CoherentStatesOverlap(self.Gamma_t, self.Gamma_0)
-        self.csott = CoherentStatesOverlap(self.Gamma_t, self.Gamma_t)
-
-        self.csw = CoherentStatesWavefunction(self.Gamma_t)
+        # preparations, variable initializations that are specific to each propagator
+        self._prepare()
         
         # time in a.u.
         self.t = 0.0
         
         # Initialize variables for t=0
         self._prefactor()
+
+    def _prepare(self):
+        """
+        initialize variables that are specific to the HK propagator,
+        this function is called after sampling the initial conditions
+        """
+        # for overlaps and wavefunctions
+        self.csoi0 = CoherentStatesOverlap(self.Gamma_i, self.Gamma_0)
+        self.csot0 = CoherentStatesOverlap(self.Gamma_t, self.Gamma_0)
+        self.csott = CoherentStatesOverlap(self.Gamma_t, self.Gamma_t)
+        
+        self.csw = CoherentStatesWavefunction(self.Gamma_t)
         
     def step(self, potential, dt):
         """
@@ -1065,6 +1064,37 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         super().__init__(Gamma_i, Gamma_t, device=device)
         self.alpha = torch.tensor(alpha)
         self.beta = torch.tensor(beta)
+
+    def _prepare(self):
+        """
+        initialize variables specific to WM propagator, 
+        this function is called after sampling the initial conditions
+        """
+        # To avoid factors of pi^d or (2 pi)^d which depend explicitly on
+        # the number of non-zero dimensions d, we absorb these factors
+        # into the definitions of the determinants
+        #
+        #   detG0   ---->    det(G0/pi) = det(G0)/pi^d
+        #   detGi   ---->    det(Gi/pi) = det(Gi)/pi^d
+        #   detGt   ---->    det(Gt/pi) = det(Gt)/pi^d
+        #   detGi0  ---->    det((Gi+G0)/(2 pi)) = det(Gi+G0)/(2 pi)^d
+        
+        # compute pseudo determinants of Gamma_0, Gamma_i and Gamma_t
+        e0, V0 = torch.symeig(self.Gamma_0, eigenvectors=True)
+        self.detG0 = torch.prod(e0[abs(e0) > ZERO]/np.pi) # torch.det(G0)
+        ei, Vi = torch.symeig(self.Gamma_i, eigenvectors=True)
+        self.detGi = torch.prod(ei[abs(ei) > ZERO]/np.pi) # torch.det(Gi)
+        et, Vt = torch.symeig(self.Gamma_t, eigenvectors=True)
+        self.detGt = torch.prod(et[abs(et) > ZERO]/np.pi) # torch.det(Gt)
+        # pseudo determinant of Gamma_i + Gamma_0
+        ei0, Vi0 = torch.symeig(self.Gamma_0 + self.Gamma_i, eigenvectors=True)
+        self.detGi0 = torch.prod(ei0[abs(ei0) > ZERO]/(2*np.pi))
+        
+        non_zero_0 = e0 > ZERO
+        # pseudo-inverse of Gamma_0
+        # iGamma_0 = torch.inverse(Gamma_0)
+        self.iGamma_0 = torch.einsum('ij,j,kj->ik', V0[:,non_zero_0], 1.0/e0[non_zero_0], V0[:,non_zero_0])
+        
     def _expand_L(self):
         """
         The function 
@@ -1127,6 +1157,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
             torch.cat((Spq,Spp), dim=1)), dim=0)
         
         return gradL, hessL
+    
     def _prefactor(self):
         # compute Herman-Kluk prefactor C
         super()._prefactor()
@@ -1162,7 +1193,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         filinov_ab = (torch.block_diag(self.alpha * self.Gamma_0, self.beta * self.iGamma_0)
                       .to(device)
                       .unsqueeze(2).expand(-1,-1,n))
-
+        
         # eqn. (50)
         A = 2*filinov_ab - hessL + (
              torch.einsum('jin,jk,kln->iln', Mqz, self.Gamma_t, Mqz)
@@ -1171,10 +1202,28 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
                  torch.einsum('jin,jkn->ikn', Mpz, Mqz)
                 -torch.einsum('jin,jkn->ikn', Epz, Eqz)
             ))
-        # To invert a batch of matrices, the axes have to be ordered as (ntraj,dim,dim)
-        # not (dim,dim,ntraj). After invering the matrices, the original order has to
+        # If the matrices of width parameters Gamma_i and Gamma_t do not have full rank,
+        # then the determinant of the matrix `A` vanishes. Therefore we have to transform
+        # A into the subspace complementary to the null space of Gamma_i and Gamma_t. It is
+        # assumed that Gamma_0, Gamma_i and Gamma_t span the same vector space.
+
+        # The phase space is twice as large as the configuration space, both coordinates and
+        # momenta have to be transformed to the non-zero subspace.
+        U2 = torch.block_diag(self.U, self.U)
+        
+        # transform A to non-zero subspace, A' = U^T @ A @ U
+        # rank(A) = 2*dim' < 2*dim
+        A = torch.einsum('ia,ijn,jb->abn', U2, A, U2)
+        
+        # To invert a batch of matrices, the axes have to be ordered as (ntraj,2*dim',2*dim')
+        # not (2*dim',2*dim',ntraj). After invering the matrices, the original order has to
         # be restored again.
         iA = torch.inverse(A.permute(2,0,1)).permute(1,2,0)
+
+        # transform inverse of A back from non-zero subspace to full vector space
+        # A^{-1} = U @ A'^{-1} @ U^T
+        iA = torch.einsum('ai,ijn,bj->abn', U2, iA, U2)
+        
         # eqn. (53)
         BQ = torch.einsum('ij,jkn->ikn', self.Gamma_t, Mqz) + 1j/hbar * Mpz
         # eqn. (54)
@@ -1226,8 +1275,26 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         
         c = self.semiclassical_prefactor()
 
+        # Because of the limit
+        #                                 2*dim
+        #  det(A) --> [2 sqrt(alpha*beta)]          for  alpha,beta --> +oo
+        #
+        # it is numerically more stable to compute
+        #
+        #  det(A') = det(A / [2 sqrt(alpha*beta)])
+        #
+        # since this determinant will be on the order of 1.
+
+        # The subspace spanned by the eigenvectors with zero eigenvalues has been
+        # removed from A', so dim' < dim.
+        # absorb factors of (2 pi) in definition of determinant:
+        #
+        #   detA  --->  det(A / (2 sqrt(alpha*beta))) = det(A) / (2 sqrt(alpha*beta))^(2*dim')
+        #
+        A = A / (2*torch.sqrt(self.alpha*self.beta))
+
         # To compute the determinant of a batch of matrices, the axes have to be 
-        # ordered as (ntraj,2*dim,2*dim) not (2*dim,2*dim,ntraj).
+        # ordered as (ntraj,2*dim',2*dim') not (2*dim',2*dim',ntraj).
         detA = torch.det(A.permute(2,0,1))
         
         # We have to choose the signs of sqrt(det(A)) such that a continuous
@@ -1244,11 +1311,21 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         G0 = Gamma_0.unsqueeze(2).expand(-1,-1,n)
         # eqn. (78)
         M = G0 + CQQ
+        # transform M to non-zero subspace
+        M = torch.einsum('ia,ijn,jb->abn', self.U, M, self.U)
         
         # inverse of M
         iM = torch.inverse(M.permute(2,0,1)).permute(1,2,0)
         # determinant of M
+        #
+        # absorb factors of (2 pi) in definition of determinant:
+        #  detM  ---->   det(M/(2 pi)) = det(M) / (2 pi)^d
+        #
+        M = M/(2*np.pi)
         detM = torch.det(M.permute(2,0,1))
+
+        # transform inverse of M back to full vector space
+        iM = torch.einsum('ai,ijn,bj->abn', self.U, iM, self.U)
         
         # batches of dim x dim matrices
         # eqn. (79)
@@ -1285,13 +1362,19 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         signs_detA = self._get_signs_of_sqrt("detA")
         
         # coefficients of Gaussians, eqn. (75)
-        v =   (torch.det(self.Gamma_0)/np.pi**d)**(1/4) \
-            * (torch.det(self.Gamma_t)/np.pi**d)**(1/4) \
-            * (torch.det(self.Gamma_i)/np.pi**d)**(1/4) \
-            * torch.sqrt((2*np.pi)**d/self.detGi0) \
+
+        # According to eqn. (75) there should be a factor of
+        #
+        #  (2*torch.sqrt(self.alpha*self.beta))**d
+        #
+        # and several factors of pi and (2 pi).
+        # These factors have been absorbed into the definitions of the determinants,
+        # see comments in _prepare(...), _prefactor(...)
+        v =   self.detG0**(1/4) * self.detGt**(1/4) * self.detGi**(1/4) \
+            * 1/torch.sqrt(self.detGi0) \
             * 1/(2*np.pi)**d \
             * C * torch.exp(1j/hbar * S) \
-            * (2*torch.sqrt(self.alpha*self.beta))**d / torch.sqrt(self.detA) * signs_detA \
+            * 1/torch.sqrt(self.detA) * signs_detA \
             * torch.exp(self.eps)
         
         q,p = self.initial_positions_and_momenta()
@@ -1468,13 +1551,12 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         
         # contribution from individual trajectories to autocorrelation function
         # prefactor part in eqn. (85)
-        cauto_qp =    (torch.det(self.Gamma_0)/np.pi**d)**(1/2) \
-                    * (torch.det(self.Gamma_t)/np.pi**d)**(1/4) \
-                    * (torch.det(self.Gamma_i)/np.pi**d)**(1/4) \
-                    * torch.sqrt((2*np.pi)**d/self.detGi0) \
+        # Factors of pi and (2 pi) have been absorbed into the definitions of the determinants,
+        cauto_qp =    self.detG0**(1/2) * self.detGt**(1/4) * self.detGi**(1/4) \
+                    * 1/torch.sqrt(self.detGi0) \
                     * C * torch.exp(1j/hbar * S) \
-                    * (2*torch.sqrt(self.alpha*self.beta))**d / torch.sqrt(self.detA) * signs_detA \
-                    * torch.sqrt((2*np.pi)**d/self.detM) * signs_detM \
+                    * 1/torch.sqrt(self.detA) * signs_detA \
+                    * 1/torch.sqrt(self.detM) * signs_detM \
                     * torch.exp(self.gamma)
         
         # exponential part in eqn. (85)
@@ -1485,6 +1567,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
             -1j/hbar * torch.einsum('in,in->n', self.Pq, q0-q)
             +1j/hbar * torch.einsum('in,in->n', self.PQ, q0-Q)
         )
+
         return cauto_qp
     
     def autocorrelation(self):
@@ -1510,7 +1593,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         #  auto     /(2 pi hbar)^d  auto                             i  auto
         #
         cauto = torch.sum(cauto_qp/(self.ntraj * self.probi * (2*np.pi*hbar)**self.dim))
-    
+        
         return cauto.item()
     
     def ic_correlation(self, potential, energy0_es=0.0):
