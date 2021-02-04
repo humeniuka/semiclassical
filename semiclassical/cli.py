@@ -595,6 +595,11 @@ def _plot_correlation_functions(filenames):
     plot autocorrelation, IC correlation and (if available) transition rates 
     loaded from .npz file
     """
+    import matplotlib
+    matplotlib.rc('xtick', labelsize=12)
+    matplotlib.rc('ytick', labelsize=12)
+    matplotlib.rc('legend', fontsize=12)
+    matplotlib.rc('axes', labelsize=12)
     import matplotlib.pyplot as plt
 
     plt.figure(figsize=(12.0,6.0))
