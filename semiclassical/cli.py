@@ -386,9 +386,8 @@ def run_semiclassical_dynamics(task, device='cpu'):
                 ic_correlation_[t] += propagator.ic_correlation(potential, energy0_es=en_zpt)
 
                 # If any NaN's are detected the simulation is aborted.
-                assert not np.isnan(autocorrelation).any(), f"encountered NaN's in autocorrelation : {autocorrelation}"
-                assert not np.isnan(ic_correlation).any(), f"encountered NaN's in IC correlation : {ic_autocorrelation}"
-                                
+                assert not np.isnan(autocorrelation_).any(), f"encountered NaN's in autocorrelation : {autocorrelation_}"
+                assert not np.isnan(ic_correlation_).any(), f"encountered NaN's in IC correlation : {ic_autocorrelation_}"
                 
                 progress_bar.set_description(f" ({repetition+1:6}/{num_repetitions:6}) {t+1:6}/{nt:6}   time= {times[t]:10.4f}   time/fs= {times[t]*units.autime_to_fs:10.4f}")
                 progress_bar.update(1)

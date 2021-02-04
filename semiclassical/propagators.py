@@ -805,7 +805,7 @@ class HermanKlukPropagator(object):
         # C   (t) = |------------- C   (t)  =  1/(2 pi hbar)^d *  sum  C (t)    / (n * P(qi,pi))
         #  auto     /(2 pi hbar)^d  auto                             i  auto
         #
-        cauto = torch.sum(cauto_qp/(self.ntraj * self.probi)) /  (2*np.pi*hbar)**self.dim
+        cauto = torch.sum(cauto_qp/(self.ntraj * self.probi * (2*np.pi*hbar)**self.dim))
     
         return cauto.item()
     
@@ -873,7 +873,7 @@ class HermanKlukPropagator(object):
                    * torch.exp(1j/hbar * self.t * torch.tensor(energy0_es)) \
                    * nacQ * nacq * cauto_qp
             
-        kic_t = torch.sum(kic_t_qp/(self.ntraj * self.probi)) /  (2*np.pi*hbar)**self.dim
+        kic_t = torch.sum(kic_t_qp/(self.ntraj * self.probi * (2*np.pi*hbar)**self.dim))
 
         return kic_t.item()
     
