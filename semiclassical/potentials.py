@@ -425,7 +425,7 @@ class _MolecularPotentialBase(object):
         """
         return self._origin
     
-    def minimize(self, r_guess, maxiter=10000, rtol=1.0e-5, gtol=1.0e-8):
+    def minimize(self, r_guess, maxiter=10000, rtol=1.0e-5, gtol=1.0e-7):
         """
         find the local minimum of the potential energy surface in the vicinity
         of `r_guess`. 
