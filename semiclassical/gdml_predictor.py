@@ -142,7 +142,8 @@ class GDMLPredict(nn.Module):
         dimM, dimD = self._Jx_alphas.size()
         dimB = r.size()[0]
         assert r.size()[1] == 3*dimN
-
+        device=self.device
+        
         sig = self._sig
         q = np.sqrt(5) / sig
 
@@ -153,7 +154,7 @@ class GDMLPredict(nn.Module):
         dists = diffs.norm(dim=-1)  # (B, N, N)
 
         # indices of lower tiangular matrix, i > j
-        i,j = np.tril_indices(dimN, k=-1)
+        i,j = np.tril_indices(dimN, k=-1, device=device)
         xs = 1.0 / dists[:, i, j]   # (B, D)
 
         del dists
@@ -182,9 +183,9 @@ class GDMLPredict(nn.Module):
         # construct Jacobian of Coulomb matrix D_(ij) = 1/|r(i)-r(j)|
         jacobian = torch.zeros(dimB, dimD, dimN, 3,
                                dtype=diffs.dtype,
-                               device=A.device)   #  (B, D, N, 3)
-        k,l = torch.tril_indices(dimN, dimN, offset=-1)
-        kl = torch.arange(dimD)
+                               device=device)   #  (B, D, N, 3)
+        k,l = torch.tril_indices(dimN, dimN, offset=-1, device=device)
+        kl = torch.arange(dimD, device=device)
         jacobian[:,kl,k,:] = -xs3[:,:,None] * diffs[:,k,l,:]
         jacobian[:,kl,l,:] -= xs3[:,:,None] * diffs[:,l,k,:]
         jacobian = torch.reshape(jacobian, (dimB, dimD, 3*dimN))
@@ -220,7 +221,7 @@ class GDMLPredict(nn.Module):
                         * diffs[:,k,l,:,None] * diffs[:,k,l,None,:] )
         h2 = -grad_x[:,kl] * xs[:,kl]**3
 
-        idxB = torch.arange(dimB).unsqueeze(1).expand(dimB, dimD)
+        idxB = torch.arange(dimB, device=device).unsqueeze(1).expand(dimB, dimD)
         # loop over cartesian coordinates u,v = x,y,z
         for u in [0,1,2]:
             for v in [0,1,2]:
