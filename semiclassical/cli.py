@@ -401,8 +401,9 @@ def run_semiclassical_dynamics(task, device='cpu'):
                 # the number of trajectories (i.e. if the basis of coherent states is complete).
                 # Calculating the norm is extremely costly (scales like Ntraj^2) and should be
                 # avoided except for debugging or finding the optimal number of trajectories.
-                calc_norm_step = task.get('calc_norm_step', 0)
-                if (calc_norm_step > 0) and (t % calc_norm_step == 0):
+                calc_norm_every = task.get('calc_norm_every', 0)
+                if (calc_norm_every > 0) and (t % calc_norm_every == 0):
+                    # compute norm every `calc_norm_every` time step
                     norm = propagator.norm()
                     logger.info(f" computing norm of wavefunction ...")
                     logger.info(f" time/fs= {times[t]*units.autime_to_fs}  norm= {norm:9.6f}")
