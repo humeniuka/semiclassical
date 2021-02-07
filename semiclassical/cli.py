@@ -396,10 +396,22 @@ def run_semiclassical_dynamics(task, device='cpu'):
                 # If any NaN's are detected the simulation is aborted.
                 assert not np.isnan(autocorrelation_).any(), f"encountered NaN's in autocorrelation : {autocorrelation_}"
                 assert not np.isnan(ic_correlation_).any(), f"encountered NaN's in IC correlation : {ic_autocorrelation_}"
-                
+
+                # Monitoring the norm tells us if the calculation is converged with respect to
+                # the number of trajectories (i.e. if the basis of coherent states is complete).
+                # Calculating the norm is extremely costly (scales like Ntraj^2) and should be
+                # avoided except for debugging or finding the optimal number of trajectories.
+                calc_norm_step = task.get('calc_norm_step', 0)
+                if (calc_norm_step > 0) and (t % calc_norm_step == 0):
+                    norm = propagator.norm()
+                    logger.info(f" computing norm of wavefunction ...")
+                    logger.info(f" time/fs= {times[t]*units.autime_to_fs}  norm= {norm:9.6f}")
+
+                # show progress
                 progress_bar.set_description(f" ({repetition+1:6}/{num_repetitions:6}) {t+1:6}/{nt:6}   time= {times[t]:10.4f}   time/fs= {times[t]*units.autime_to_fs:10.4f}")
                 progress_bar.update(1)
 
+                # advance to next time step,  t -> t+dt
                 propagator.step(potential, dt)
 
         # for molecular potentials, export final coordinates and momenta for visualization
