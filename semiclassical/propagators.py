@@ -1501,13 +1501,22 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
                 CQQj_ = CQQj.unsqueeze(2).expand(-1,-1,ni,-1)
                 # D^{(ij)} = C_QQ^{(i)*} + C_QQ^{(j)}
                 Dij = CQQi_.conj() + CQQj_
+
+                # transform Dij to non-zero subspace, Dij' = U^T @ Dij @ U
+                Dij = torch.einsum('ia,ijmn,jb->abmn', self.U, Dij, self.U)
+
                 # permute axis in `Dij` so that batch dimensions ni,nj come first, 
                 #  (d,d,ni,nj) -> (ni,nj,d,d)
                 Dij = Dij.permute(2,3,0,1)
                 # inverse of D^(ij) = C_QQ^(i)^* + C_QQ^(j) and restore original order of axes
                 iDij = torch.inverse(Dij).permute(2,3,0,1)
-                # determinant of D^(ij)
-                detDij = torch.det(Dij)
+
+                # transform inverse of Dij back from non-zero subspace to full vector space
+                # Dij^{-1} = U @ Dij'^{-1} @ U^T
+                iDij = torch.einsum('ai,ijmn,bj->abmn', self.U, iDij, self.U)
+
+                # determinant of det( D^(ij) / (2 pi) ) = det(D^(ij))/(2 pi)^d
+                detDij = torch.det(Dij / (2*np.pi))
                 #
                 bij = torch.einsum('abij,bij->aij', CQQj_, dQij) + di_.conj() + dj_
                 
@@ -1516,7 +1525,7 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
                 
                 # This is not really an overlap but we call it like this because the code
                 # looks similar to the HK norm.
-                olap_ij = torch.sqrt((2*np.pi)**d / detDij) * torch.exp(
+                olap_ij = 1/torch.sqrt(detDij) * torch.exp(
                     -0.5 * torch.einsum('aij,abij,bij->ij', dQij, CQQj_, dQij)
                          - torch.einsum('aij,aij->ij', dj_, dQij)
                     +0.5 * torch.einsum('aij,abij,bij->ij', bij, iDij, bij))

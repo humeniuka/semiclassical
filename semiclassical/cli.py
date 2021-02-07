@@ -401,6 +401,8 @@ def run_semiclassical_dynamics(task, device='cpu'):
                 # the number of trajectories (i.e. if the basis of coherent states is complete).
                 # Calculating the norm is extremely costly (scales like Ntraj^2) and should be
                 # avoided except for debugging or finding the optimal number of trajectories.
+                # The norm can only be computed for the trajectories in a single batch. Multiple
+                # batches improve the statistics, but this not reflected in the norm of a single batch.
                 calc_norm_every = task.get('calc_norm_every', 0)
                 if (calc_norm_every > 0) and (t % calc_norm_every == 0):
                     # compute norm every `calc_norm_every` time step
