@@ -395,9 +395,17 @@ def run_semiclassical_dynamics(task, device='cpu'):
                 autocorrelation_[t] += propagator.autocorrelation()
                 ic_correlation_[t] += propagator.ic_correlation(potential, energy0_es=en_zpt)
 
-                # If any NaN's are detected the simulation is aborted.
-                assert not np.isnan(autocorrelation_).any(), f"encountered NaN's in autocorrelation : {autocorrelation_}"
-                assert not np.isnan(ic_correlation_).any(), f"encountered NaN's in IC correlation : {ic_autocorrelation_}"
+                # checks
+                try:
+                    # If any NaN's are detected the simulation is aborted.
+                    assert not np.isnan(autocorrelation_).any(), f"encountered NaN's in autocorrelation : {autocorrelation_}"
+                    assert not np.isnan(ic_correlation_).any(), f"encountered NaN's in IC correlation : {ic_autocorrelation_}"
+                except AssertionError as error:
+                    # save current trajectories (positions and momenta) as this information is helpful for debugging
+                    logger.info("NaN's detected, saving trajectories to 'current_trajectories.xyz' for debugging ...")
+                    _export_trajectories_extxyz('current_trajectories.xyz', atoms, propagator,
+                                                append=False)
+                    raise error
 
                 # Monitoring the norm tells us if the calculation is converged with respect to
                 # the number of trajectories (i.e. if the basis of coherent states is complete).

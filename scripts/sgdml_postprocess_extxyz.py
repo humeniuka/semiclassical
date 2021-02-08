@@ -15,7 +15,9 @@ parser = argparse.ArgumentParser(
 
  * Rigid rotation/translation can be removed from the vector field so that the forces depend only on internal coordinates.
  * To make the vector field continuous, the overall sign of the vectors at each geometry can be chosen so as to minimize 
-   the angle with vectors at neighbouring geometries.""",
+   the angle with vectors at neighbouring geometries.
+ * Ensure correct dissociation limit by augmenting the dataset with a set of scaled geometries where all bonds are broken.
+""",
     formatter_class=argparse.RawTextHelpFormatter)
 
 parser.add_argument('input_xyz',
@@ -51,10 +53,27 @@ parser.add_argument(
     action='store_true',
     help='align signs of NAC vectors so as to make the vector field continuous')
 
+parser.add_argument(
+    '-d',
+    '--fix_dissociation',
+    dest='fix_dissociation',
+    action='store_true',
+    help='add dissociated geometries with zero forces and energies equal to sum of atomic energies so as to enforce correct dissociation limit')
+parser.add_argument(
+    '--dissoc_limit',
+    dest='dissoc_limit',
+    type=float,
+    default=None,
+    metavar='ENERGY',
+    help='set dissociation limit explicity (in Hartree), if not set the dissociation limit is computed from atomic wB97XD/def2SVP energies')
+
 args = parser.parse_args()
 
 assert args.input_xyz != args.output_xyz, "Input and output files should be different."
-assert args.remove_rotation or args.remove_translation or args.align_signs, "At least one operation (-s and/or -r, -t) has to be performed."
+assert (   args.remove_rotation
+        or args.remove_translation
+        or args.align_signs
+        or args.fix_dissociation), "At least one operation (-s and/or -r, -t, -d) has to be performed."
 
 def eliminate_translation(mol):
     """
@@ -195,6 +214,73 @@ def align_phases(molecules):
     return assigned
 
 
+
+def fix_dissociation_limit(molecules, dissoc_limit=None, scale=3.0, n=1000):
+    """
+    expand the data set by adding fully dissociated molecules with forces=0 and energies
+    equal to the dissociation energy
+
+    This is supposed to ensure that the fitted potential energy surface has the correct
+    dissociation limit.
+
+    Parameters
+    ----------
+    molecules    :   list of ase.atoms.Atoms
+      list of molecules from original data set
+    dissoc_limit :   float or None
+      dissociation limit (in Hartree), if None compute limit from atomic energies
+    scale        :   float > 2.0
+      All coordinates are scaled by this factor, it should be large enough
+      so that all bonds in the scaled geometry are broken
+    n            :   int
+      Only the first `n` geometries are scaled
+
+    Returns
+    -------
+    scaled    :   list of ase.atoms.Atoms (n,)
+      list of dissociated molecules
+    """
+    # Energies of isolated atoms in Singlet or Double ground state
+    # at the wB97XD/def2SVP level of theory (in Hartree)
+    _atomic_energies = {
+        'H' :   -0.5018819259,
+        'C' :  -37.7281684180,
+        'N' :  -54.4087068942,
+        'O' :  -74.8713971303,
+        'F' :  -99.6122174159,
+        'S' : -397.9008049257,
+        'Cl': -459.9762645185
+    }
+
+    # If all bonds in the molecule are broken, the energy should be equal
+    # to the sum of the atomic energies (assuming all atoms are in the ground state)
+    # This is the dissociation energy to which the ground state energy
+    # of a molecule should converge as the bonds are elongated.
+    assert len(molecules) > 0, "list of molecules is empty"
+    atoms = molecules[0]
+    if dissoc_limit is None:
+        print(f"computing dissociation energy as sum of atomic wB97XD/def2SVP energies")
+        assert set(atoms.get_chemical_symbols()) - set(['H', 'C', 'N', 'O', 'F', 'S', 'Cl']) == set(), "Atomic energies are only available for H,C,N,O,F,S,Cl"
+        dissoc_limit = np.sum([_atomic_energies[elem] for elem in atoms.get_chemical_symbols()])
+    print(f"dissociation energy        : {dissoc_limit:10.5f} Hartree")
+    # energies of samples
+    energies = [atoms.info["Energy"] for atoms in molecules]
+    print(f"average energy of samples :  {np.mean(energies):10.5f} Hartree")
+    print(f"minimum energy of samples :  {np.min(energies):10.5f} Hartree")
+    print(f"maximum energy of samples :  {np.max(energies):10.5f} Hartree")
+    
+    scaled = []
+    for i in range(0, min(len(molecules), n)):
+        mol = molecules[i].copy()
+        mol.set_positions(scale * mol.get_positions())
+        # set energy to dissociation energy
+        mol.info["Energy"] = dissoc_limit
+        # set gradient of energy to 0
+        mol.set_momenta(0.0 * mol.get_momenta())
+        scaled.append(mol)
+
+    return scaled
+            
 def _properties_parser(comment_line):
     dic = extxyz.key_val_str_to_dict(comment_line)
     # If the extended xyz file lacks a property string,
@@ -232,7 +318,11 @@ if args.remove_rotation:
     print(" * eliminating rigid rotation to make vector field curl-free")
     for i,mol in enumerate(molecules):
         eliminate_rotation(mol)
-    
+
+if args.fix_dissociation:
+    print(" * add fully dissociated molecules to dataset to fix dissociation limit")
+    molecules += fix_dissociation_limit(molecules)
+        
 # save processed molecules
 with open(args.output_xyz, "w") as f:
     for i,mol in enumerate(molecules):
