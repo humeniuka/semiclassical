@@ -421,25 +421,25 @@ References
 ----------
 
 .. [HK] E. Kluk, M. Herman, H. Davis,
-   *Comparison of the propagation of semiclassical frozen Gaussian wave functions with quantum propagation for a highly excited anharmonic oscillator*
-   J. Chem. Phys. 84, 326, (1986)
-   [10.1063/1.450142](https://doi.org/10.1063/1.450142)
+   | *Comparison of the propagation of semiclassical frozen Gaussian wave functions with quantum propagation for a highly excited anharmonic oscillator*
+   | J. Chem. Phys. 84, 326, (1986)
+   | https://doi.org/10.1063/1.450142
        
 .. [WM] A. Walton, D. Manolopoulos,
-   *A new semiclassical initial value method for Franck-Condon spectra*
-   Mol. Phys. 87, 961-978, (1996)
-   [10.1080/00268979600100651](https://doi.org/10.1080/00268979600100651)
+   | *A new semiclassical initial value method for Franck-Condon spectra*
+   | Mol. Phys. 87, 961-978, (1996)
+   | https://doi.org/10.1080/00268979600100651
      
 .. [sGDML] S. Chmiela et al.
    *sGDML: Constructing Accurate and Data Efficient Molecular Force Fields Using Machine Learning.*
-   Comput. Phys. Commun. 240, 38-45 (2019)
-   [10.1016/j.cpc.2019.02.007](https://doi.org/10.1016/j.cpc.2019.02.007)
-   https://github.com/stefanch/sGDML
+   | Comput. Phys. Commun. 240, 38-45 (2019)
+   | https://doi.org/10.1016/j.cpc.2019.02.007 
+   | https://github.com/stefanch/sGDML
    
-.. [anharmAS] A. Humeniuk et al.,
-   *Predicting fluorescence quantum yields for molecules in solution: A critical assessment of the harmonic approximation and the choice of the lineshape function*
-   J. Chem. Phys. 152, 054107 (2020)
-   [10.1063/1.5143212](https://doi.org/10.1063/1.5143212)
+.. [anharmAS] A. Humeniuk et al.
+   | *Predicting fluorescence quantum yields for molecules in solution: A critical assessment of the harmonic approximation and the choice of the lineshape function*
+   | J. Chem. Phys. 152, 054107 (2020)
+   | https://doi.org/10.1063/1.5143212
 
 
    
