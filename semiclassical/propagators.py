@@ -83,7 +83,7 @@ def _is_symmetric_non_negative(A, eps=1.0e-6):
 
 # # Fourth-Order Runge-Kutta Integrator
 
-def _rk4_step(f, y, t, h, *args):
+def _rk4_step(eom, y, t, h, *args):
     """
 
     Propagate a solution of the differential equation
@@ -94,13 +94,13 @@ def _rk4_step(f, y, t, h, *args):
 
     Parameters
     ----------
-    f  :  callable
-      function giving derivative y'
-    y  :  Tensor
+    eom  :  :obj:`EquationsOfMotion`
+      eom.f(t, y, args) should give derivative y'
+    y    :  Tensor
       solution at initial time, y(t)
-    t  :  float
+    t    :  float
       time
-    h  :  float
+    h    :  float
       time steps
     args : additional arguments passed to `f`
 
@@ -111,10 +111,10 @@ def _rk4_step(f, y, t, h, *args):
 
     """
     # displacements
-    k1 = f(t,         y,            *args)
-    k2 = f(t + 0.5*h, y + 0.5*h*k1, *args)
-    k3 = f(t + 0.5*h, y + 0.5*h*k2, *args)
-    k4 = f(t +     h, y +     h*k3, *args)
+    k1 = eom.f(t,         y,            *args)
+    k2 = eom.f(t + 0.5*h, y + 0.5*h*k1, *args)
+    k3 = eom.f(t + 0.5*h, y + 0.5*h*k2, *args)
+    k4 = eom.f(t +     h, y +     h*k3, *args)
     #
     return y + h/6.0 * (k1 + 2*k2 + 2*k3 + k4)
 
@@ -293,89 +293,109 @@ class CoherentStatesWavefunction(object):
 
     
 # # Newton's equations for classical trajectories and monodromy matrices
+class EquationsOfMotion(object):
+    def __init__(self):
+        """
+        Newton's equations of motion for propagating the
+          * positions q,
+          * momenta p,
+          * monodromy matrices Mqq = dq(t)/dq(0), Mqp = dq(t)/dp(0), Mpq = dp(t)/dq(0), Mpp = dp(t)/dp(0)
+          * and classical action S
+        are combined into a single first-order differential equation
     
-def _equations_of_motion(t, y, potential):
-    """
-    Newton's equations of motion for propagating the
-        * positions q,
-        * momenta p,
-        * monodromy matrices Mqq = dq(t)/dq(0), Mqp = dq(t)/dp(0), Mpq = dp(t)/dq(0), Mpp = dp(t)/dp(0)
-        * and classical action S
-    are combined into a single first-order differential equation
-    
-        dy/dt = f(y)
+          dy/dt = f(y)
         
-    for the vector y = (q,p,Mqq,Mqp,Mpq,Mpp,action).
+        for the vector y = (q,p,Mqq,Mqp,Mpq,Mpp,action).        
+        """
+        # average total energies <Tkin+Vpot> at time steps t-dt and t
+        self._energies = []
+        
+    def f(self, t, y, potential):
+        """
+        This function evaluates the derivative f(y).
+        
+        Parameters
+        ----------
+        t   :  float
+          current time (in a.u.)
+        y   :  Tensor (4*d**2+2*d+1,n)
+          current solution vector
+        potential : object
+          potential energy surface implementing the method `harmonic_approximation(r)`
+        """
+        d = potential.dimensions()
+        masses = potential.masses().to(y.device)
     
-    This function evaluates the derivative f(y).
+        q,p, Mqq,Mqp,Mpq,Mpp, action = torch.split(y, [d,d,d**2,d**2,d**2,d**2,1])
     
-    Parameters
-    ----------
-    t   :  float
-      current time (in a.u.)
-    y   :  Tensor (4*d**2+2*d+1,n)
-      current solution vector
-    potential : object
-      potential energy surface implementing the method `harmonic_approximation(r)`
-    """
-    d = potential.dimensions()
-    masses = potential.masses().to(y.device)
-    
-    q,p, Mqq,Mqp,Mpq,Mpp, action = torch.split(y, [d,d,d**2,d**2,d**2,d**2,1])
-    
-    Mqq = Mqq.view(d,d,-1)
-    Mqp = Mqp.view(d,d,-1)
-    Mpq = Mpq.view(d,d,-1)
-    Mpp = Mpp.view(d,d,-1)
+        Mqq = Mqq.view(d,d,-1)
+        Mqp = Mqp.view(d,d,-1)
+        Mpq = Mpq.view(d,d,-1)
+        Mpp = Mpp.view(d,d,-1)
+        
+        vpot, grad, hess = potential.harmonic_approximation(q)
 
-    vpot, grad, hess = potential.harmonic_approximation(q)
+        #
+        # d   dq_a(t)          dp_a(t)
+        # -- (-------) = 1/m_a -------
+        # dt  dq_b(i)          dq_b(t)
+        DMqq = Mpq / masses.unsqueeze(1).unsqueeze(2).expand_as(Mpq)
+        #
+        # d   dp_a(t)              d^2 V     dq_g(t)
+        # -- (-------) = sum  -  --------- * -------
+        # dt  dq_b(i)       g    dq_a dq_g   dq_b(i)
+        DMpq = - torch.einsum('ag...,gb...->ab...', hess, Mqq)
+        #
+        # d   dq_a(t)          dp_a(t)
+        # -- (-------) = 1/m_a -------
+        # dt  dp_b(i)          dp_b(t)
+        DMqp = Mpp / masses.unsqueeze(1).unsqueeze(2).expand_as(Mpp)
+        #
+        # d   dp_a(t)              d^2 V     dq_g(t)
+        # -- (-------) = sum  -  --------- * -------
+        # dt  dp_b(i)       g    dq_a dq_g   dp_b(i)
+        DMpp = - torch.einsum('ag...,gb...->ab...', hess, Mqp)
 
-    #
-    # d   dq_a(t)          dp_a(t)
-    # -- (-------) = 1/m_a -------
-    # dt  dq_b(i)          dq_b(t)
-    DMqq = Mpq / masses.unsqueeze(1).unsqueeze(2).expand_as(Mpq)
-    #
-    # d   dp_a(t)              d^2 V     dq_g(t)
-    # -- (-------) = sum  -  --------- * -------
-    # dt  dq_b(i)       g    dq_a dq_g   dq_b(i)
-    DMpq = - torch.einsum('ag...,gb...->ab...', hess, Mqq)
-    #
-    # d   dq_a(t)          dp_a(t)
-    # -- (-------) = 1/m_a -------
-    # dt  dp_b(i)          dp_b(t)
-    DMqp = Mpp / masses.unsqueeze(1).unsqueeze(2).expand_as(Mpp)
-    #
-    # d   dp_a(t)              d^2 V     dq_g(t)
-    # -- (-------) = sum  -  --------- * -------
-    # dt  dp_b(i)       g    dq_a dq_g   dp_b(i)
-    DMpp = - torch.einsum('ag...,gb...->ab...', hess, Mqp)
+        #
+        # dq_a/dt = 1/m_a p_a
+        Dq = p / masses.unsqueeze(1).expand_as(p)
+        #
+        # dp_a/dt = - dV/dq_a
+        Dp = -grad
 
-    #
-    # dq_a/dt = 1/m_a p_a
-    Dq = p / masses.unsqueeze(1).expand_as(p)
-    #
-    # dp_a/dt = - dV/dq_a
-    Dp = -grad
+        # dS = p^2/(2m) - V
+        tkin = 0.5 * torch.sum(p**2 / masses.unsqueeze(1).expand_as(p), 0)
+        Daction = tkin - vpot
+    
+        # combine all derivatives
+        dydt = torch.cat((Dq,Dp,
+                          DMqq.reshape(d**2,-1),
+                          DMqp.reshape(d**2,-1),
+                          DMpq.reshape(d**2,-1),
+                          DMpp.reshape(d**2,-1),
+                          Daction.reshape(1,-1)), 0)
+    
+        # Average of total energies (kinetic + potential) of all classical trajectories 
+        # should be conservd.
+        self._en_mean = torch.mean(tkin + vpot)
+        logger.debug(f"average energy of classical trajectories <T+V>= {self._en_mean}")
+        
+        return dydt
 
-    # dS = p^2/(2m) - V
-    tkin = 0.5 * torch.sum(p**2 / masses.unsqueeze(1).expand_as(p), 0)
-    Daction = tkin - vpot
-    
-    # combine all derivatives
-    dydt = torch.cat((Dq,Dp,
-                      DMqq.reshape(d**2,-1),
-                      DMqp.reshape(d**2,-1),
-                      DMpq.reshape(d**2,-1),
-                      DMpp.reshape(d**2,-1),
-                      Daction.reshape(1,-1)), 0)
-    
-    # Average of total energies (kinetic + potential) of all classical trajectories 
-    # should be conservd.
-    en_mean = torch.mean(tkin + vpot)
-    logger.debug(f"average energy of classical trajectories <T+V>= {en_mean}")
-    
-    return dydt
+    def check_energy_conservation(self, change_tol=1.0e-3):
+        """raise an exception if energy conservation is violated"""
+        self._energies.append(self._en_mean)
+        # `self._energies` contains the mean energies of the classical trajectories
+        # at the last two time steps.
+        if len(self._energies) > 1:
+            # check that <T+V> is conserved between time steps
+            change = abs(self._energies[1] - self._energies[0])
+            if change > change_tol:
+                logger.error(f"  energy conservation violated")
+                logger.error(f"  <T+V>(t-dt)= {self._energies[0]}, <T+V>(t)= {self._energies[1]}")
+                raise RuntimeError(f"average energy of classical trajectories is not conserved, change= {change} Hartree")
+
+            self._energies.pop(0)
 
 
 # # Herman-Kluk Propagator
@@ -410,7 +430,7 @@ class HermanKlukPropagator(object):
         # move input tensors to device
         Gamma_i, Gamma_t = Gamma_i.to(device), Gamma_t.to(device)
         logger.info(f"propagation will be run on device '{self.device}'")
-
+        
         # width parameters of coherent states
         self.Gamma_i = Gamma_i
         self.Gamma_t = Gamma_t
@@ -418,6 +438,9 @@ class HermanKlukPropagator(object):
         self.sqGi, self.isqGi = _sym_sqrtm(Gamma_i)
         # \Gamma_t^{1/2} and \Gamma_t^{-1/2}
         self.sqGt, self.isqGt = _sym_sqrtm(Gamma_t)
+
+        # Newton's equations of motion for classical trajectories
+        self.eom = EquationsOfMotion()
         
     def initial_conditions(self, q0, p0, Gamma_0,
                            ntraj=5000):
@@ -625,7 +648,8 @@ class HermanKlukPropagator(object):
         """
         assert self.dim == potential.dimensions(), "potential has wrong dimensions"
         
-        self.y = _rk4_step(_equations_of_motion, self.y, self.t, dt, potential)
+        self.y = _rk4_step(self.eom, self.y, self.t, dt, potential)
+        self.eom.check_energy_conservation()
         self._prefactor()
         
         self.t += dt
@@ -1565,11 +1589,11 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
                     * 1/torch.sqrt(self.detGi0) \
                     * C * torch.exp(1j/hbar * S) \
                     * 1/torch.sqrt(self.detA) * signs_detA \
-                    * 1/torch.sqrt(self.detM) * signs_detM \
-                    * torch.exp(self.gamma)
+                    * 1/torch.sqrt(self.detM) * signs_detM
         
         # exponential part in eqn. (85)
         cauto_qp = cauto_qp * torch.exp(
+                self.gamma 
                 -0.5 * torch.einsum('in,ijn,jn->n', q0-q, self.Rqq, q0-q)
                 -0.5 * torch.einsum('in,ijn,jn->n', q0-Q, self.RQQ, q0-Q)
                 +      torch.einsum('in,ijn,jn->n', q0-q, self.RqQ, q0-Q)

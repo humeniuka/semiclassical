@@ -153,12 +153,14 @@ def main():
             _show_information(args.correlation_file)
                 
     except:
-        logging.exception("""
+        logger.exception("""
         An error occurred, see traceback below
 
         Suggestions:
          * Check the JSON input file for mistakes.
          * If there is insufficient memory, decrease 'batch_size'.
+         * If energy conservation is violated, check that the potential has a stable minimum
+           or reduce the step size.
         """)
         
 class ConfigurationError(Exception):
