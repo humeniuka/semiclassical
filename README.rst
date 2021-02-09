@@ -416,9 +416,9 @@ with 'gdml' potential
   ]}
 
 
----------------
-GDML potentials
----------------
+-------------------------------------
+Dissociation limit of GDML potentials
+-------------------------------------
 ML potentials can be very accurate for interpolating, but terribly wrong when extrapolating
 outside the range of the training data. In particular the dissociation limit will be completely wrong
 (even -infinity), unless the training data is augmented with structures where bonds are broken. 
