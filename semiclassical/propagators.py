@@ -382,7 +382,7 @@ class EquationsOfMotion(object):
         
         return dydt
 
-    def check_energy_conservation(self, change_tol=1.0e-3):
+    def check_energy_conservation(self, change_tol=1.0e-2):
         """raise an exception if energy conservation is violated"""
         self._energies.append(self._en_mean)
         # `self._energies` contains the mean energies of the classical trajectories
