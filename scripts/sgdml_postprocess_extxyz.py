@@ -283,7 +283,7 @@ def fix_dissociation_limit(molecules, dissoc_limit=None, scale=4.0, ngeo=1000):
     print(f"minimum energy of samples :  {np.min(energies):10.5f} Hartree")
     print(f"maximum energy of samples :  {np.max(energies):10.5f} Hartree")
 
-    print(f"adding first {ngeo} geometries with coordinates scaled by a factor of {scale} and forces=0 .")
+    print(f"adding first {ngeo} geometries with coordinates scaled by a factor of {scale} and energy=E(dissociation) and forces=0")
     scaled = []
     for i in range(0, min(len(molecules), ngeo)):
         mol = molecules[i].copy()
