@@ -541,7 +541,7 @@ def calculate_rates(task):
     data = dict(np.load(corr_file))
 
     logger.info(f"trajectories : {data['trajectories']}")
-    logger.info(f"time grid    : tmin= {data['times'].min():.4f} tmax= {data['times'].max():.4f} steps= {len(data['times'])}")
+    logger.info(f"time grid    : tmin= {data['times'].min()*units.autime_to_fs:.4f} tmax= {data['times'].max()*units.autime_to_fs:.4f} steps= {len(data['times'])}")
     
     data['broadening'] = broad
     data['hwhmG'] = hwhmG
