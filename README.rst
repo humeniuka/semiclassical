@@ -161,13 +161,8 @@ Keywords for "dynamics" task
    |          ``model_file``
    |
    |		 **Description:** Path to file with vibrational frequencies (in cm-1), Huang-Rhys
-   |                 factors and non-adiabatic couplings for each vibrational mode.
+   |                 factors, non-adiabatic couplings and anharmonicities for each vibrational mode.
    |             **Datatype:** string
-   |
-   |          ``anharmonicity``
-   |
-   |             **Description:** Degree of anharmonicity chi (0 : harmonic, > 0.0 : anharmonic)
-   |             **Datatype:** float
    |
    | Keywords for the 'harmonic' potential:
    |
@@ -324,8 +319,7 @@ with 'anharmonic AS' potential
 	"task" : "dynamics",
 	"potential" : {
 	    "type"          : "anharmonic AS",
-	    "model_file"    : "AS_model.dat",
-	    "anharmonicity" : 0.02
+	    "model_file"    : "AS_model.dat"
 	},
 	"propagator" : "HK",
 	"batch_size"            : 10000,
@@ -347,7 +341,43 @@ with 'anharmonic AS' potential
     }
   ]}
 
+  
+The file `AS_model.dat` contains the normal mode frequencies, Huang-Rhys factors, NACs
+and anharmonicities for each mode. The initial potential differs from the final one by
+a rigid displacement. 
 
+The sign of the Huang-Rhys factor encodes the sign of the displacement:
+
+```math
+   DISPLACEMENT = sqrt(2*|S|/OMEGA) * sign(S)
+```
+
+The initial potential is harmonic, the final one is a Morse potential with anharmonicity
+CHI. The anharmonicities can be obtained in principle from the ratio of the
+anharmonic to the harmonic frequencies as:
+
+```math
+   CHI = 1/2 (1 - OMEGA(anharmonic)/OMEGA(harmonic) )
+```
+
+<details>
+  <summary>Example <b>AS_model.dat</b> file for 5 modes:</summary>
+  <p>
+
+```text
+# normal frequency            Huang-Rhys factor     Non-adiabatic coupling       Anharmonicity
+# OMEGA_j / cm^-1                  |S_j|                  <S0|d/dQj|S1>           CHI
+     +500.8809000000            +0.3474950080            -0.0000460805            0.02
+     +827.3282000000            +0.3824004553            +0.0000595520            0.02
+     +990.0261000000            -0.4168571687            -0.0000150425            0.02
+    +1351.1072000000            -0.0935664944            +0.0002054889            0.02
+    +3256.3099000000            +0.0033317953            +0.0000665122            0.02
+    
+```
+
+ </p>
+</details>
+  
 =========================
 with 'harmonic' potential
 =========================

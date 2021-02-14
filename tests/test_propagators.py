@@ -338,7 +338,7 @@ class TestAdiabaticShiftModel(unittest.TestCase):
     def _load_AS_model(self, num_modes=5, anharmonicity=0.0):
         # load precalculated AS model and exact QM correlation functions for internal conversion
         data_dir = f"DATA/AnharmonicAS/{num_modes}modes"
-        model_file = f"{data_dir}/AS_model.dat"
+        model_file = f"{data_dir}/AS_model_chi{anharmonicity:.2f}.dat"
         ic_corr_file = f"{data_dir}/ic_correlation_chi{anharmonicity:.2f}_T0.001.dat"
         
         # # Adiabatic Shift Model
@@ -360,6 +360,11 @@ class TestAdiabaticShiftModel(unittest.TestCase):
         S = data[:,1]
         # NACs
         nac = data[:,2]
+
+        # anharmonicity
+        self.anharmonicity = anharmonicity
+        chi = data[:,3]
+        assert (chi == anharmonicity).all(), f"Anharmonicities in the model file should be equal to {self.anharmonicity}."
         
         # The horizontal shift dQ of the excited state PES is related to the Huang-Rhys factor
         #  S = 1/2 dQ^2 omega
@@ -387,10 +392,6 @@ class TestAdiabaticShiftModel(unittest.TestCase):
         
         # zero-point energy of the excited state potential
         self.en0 = torch.sum(hbar/2.0 * omega).item()
-
-        # anharmonicity
-        self.anharmonicity = anharmonicity
-        chi = torch.tensor([anharmonicity]).expand_as(self.omega)
         
         # ground state potential energy surface 
         self.potential = MorsePotential(self.omega, chi, nac)

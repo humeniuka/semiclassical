@@ -226,7 +226,6 @@ def run_semiclassical_dynamics(task, device='cpu'):
         
     elif p['type'] == "anharmonic AS":
         model_file = p['model_file']
-        anharmonicity = p['anharmonicity']
 
         # load frequencies, Huang-Rhys factors and NACs
         data = torch.from_numpy( np.loadtxt(model_file) )
@@ -258,8 +257,13 @@ def run_semiclassical_dynamics(task, device='cpu'):
         # The sign of S is not needed anymore, Huang-Rhys factors are always positive
         S = abs(S)
 
-        # anharmonicity
-        chi = torch.tensor([anharmonicity]).expand_as(omega)
+        # anharmonicity chi (chi=0 : harmonic,  chi>0 : anharmonic). The anharmonicity can be
+        # computed from the ratio of the anharmonic and harmonic frequencies as
+        #
+        #  chi = 1/2 * (1 - w(anharmonic)/w(harmonic))
+        #
+        # Typical values are in the range 0.0 - 0.03. 
+        chi = data[:,3]
 
         # ground state potential energy surface 
         potential = potentials.MorsePotential(omega, chi, nac)
