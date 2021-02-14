@@ -348,36 +348,36 @@ a rigid displacement.
 
 The sign of the Huang-Rhys factor encodes the sign of the displacement:
 
-```math
-   DISPLACEMENT = sqrt(2*|S|/OMEGA) * sign(S)
-```
+.. math::
+   
+   \Delta Q = sign(S) \sqrt{2 |S|/\omega}
+
 
 The initial potential is harmonic, the final one is a Morse potential with anharmonicity
 CHI. The anharmonicities can be obtained in principle from the ratio of the
 anharmonic to the harmonic frequencies as:
 
-```math
-   CHI = 1/2 (1 - OMEGA(anharmonic)/OMEGA(harmonic) )
-```
+.. math::
+   
+   \chi = \frac{1}{2} (1 - \frac{\omega(anharmonic)}{\omega(harmonic)} )
 
-<details>
-  <summary>Example <b>AS_model.dat</b> file for 5 modes:</summary>
-  <p>
 
-```text
-# normal frequency            Huang-Rhys factor     Non-adiabatic coupling       Anharmonicity
-# OMEGA_j / cm^-1                  |S_j|                  <S0|d/dQj|S1>           CHI
-     +500.8809000000            +0.3474950080            -0.0000460805            0.02
-     +827.3282000000            +0.3824004553            +0.0000595520            0.02
-     +990.0261000000            -0.4168571687            -0.0000150425            0.02
-    +1351.1072000000            -0.0935664944            +0.0002054889            0.02
-    +3256.3099000000            +0.0033317953            +0.0000665122            0.02
-    
-```
+.. raw:: html
+	 
+	 <details>
+	 <summary>Example <b>AS_model.dat</b> file for 5 modes:</summary>
+	 <pre>
+	 # normal frequency            Huang-Rhys factor     Non-adiabatic coupling     Anharmonicity
+	 # OMEGA_j / cm^-1                  |S_j|                (S0|d/dQj|S1)             CHI
+	     +500.8809000000            +0.3474950080            -0.0000460805            0.02
+	     +827.3282000000            +0.3824004553            +0.0000595520            0.02
+	     +990.0261000000            -0.4168571687            -0.0000150425            0.02
+	    +1351.1072000000            -0.0935664944            +0.0002054889            0.02
+	    +3256.3099000000            +0.0033317953            +0.0000665122            0.02
+	 </pre>
+	 </details>
 
- </p>
-</details>
-  
+	 
 =========================
 with 'harmonic' potential
 =========================
@@ -411,7 +411,99 @@ with 'harmonic' potential
     }
   ]}
 
+`opt_freq_s0.fchk` and `opt_freq_s1.fchk` are formatted checkpoint files from optimizations on S0 and S1, respectively, followed frequency and NAC (only for S1) calculations. You can use the script `trim_formatted_checkpoint_file.awk` to extracty the required fields from a formatted checkpoint file.
   
+.. raw:: html
+
+    <details>
+    <summary>Example <b>opt_freq_s0.fchk</b>, harmonic S0 potential of methylium:</summary>
+    <pre>
+    optimize on S0 potential, frequencies                                   
+    Freq      RwB97XD                                                     def2SVP             
+    Number of atoms                            I                4
+    Atomic numbers                             I   N=           4
+	       1           6           1           1
+    Current cartesian coordinates              R   N=          12
+      4.45491930E-01  4.15739191E+00  9.45322479E-02 -1.63708697E+00  4.15740227E+00
+      9.44766147E-02 -2.67842103E+00  5.96093482E+00  9.45328735E-02 -2.67841408E+00
+      2.35386090E+00  9.44034888E-02
+    Real atomic weights                        R   N=           4
+      1.00782504E+00  1.20000000E+01  1.00782504E+00  1.00782504E+00
+    Total Energy                               R     -3.943503734612899E+01
+    Cartesian Gradient                         R   N=          12
+      1.92317021E-06 -6.76080549E-07  7.69437388E-07  4.13362538E-06  2.24121132E-06
+     -2.30920968E-06 -2.96661554E-06  3.90776059E-06  7.65128225E-07 -3.09018006E-06
+     -5.47289136E-06  7.74644072E-07
+    Cartesian Force Constants                  R   N=          78
+      3.59316423E-01 -1.12159121E-06  4.41541878E-02  8.61581304E-06  8.77307199E-07
+      2.00138511E-02 -3.57492724E-01  1.51668664E-06 -7.97868310E-06  6.28382302E-01
+      1.13533618E-06 -6.14899388E-02 -7.24467215E-08 -4.42352665E-06  6.28129653E-01
+     -7.33503579E-06 -5.84551234E-08 -5.96120727E-02  9.22299826E-06  1.59525818E-05
+      1.78546614E-01 -9.11640326E-04  2.05014641E-02  4.12357010E-07 -1.35445741E-01
+      1.28142779E-01  3.62971294E-06  1.22927984E-01 -3.92045005E-03  8.66793935E-03
+     -6.56297014E-07  1.28131788E-01 -2.83321055E-01 -6.38897366E-06 -1.36427813E-01
+      2.80357150E-01 -7.68196960E-07  2.02503349E-08  1.97990308E-02  3.95922771E-06
+     -6.93829406E-06 -5.94669691E-02 -3.58695227E-06  7.89328491E-06  1.98211778E-02
+     -9.12058917E-04 -2.05018592E-02 -1.04948695E-06 -1.35443837E-01 -1.28139490E-01
+     -5.51767541E-06  1.34293977E-02  1.22164750E-02  3.95921521E-07  1.22926498E-01
+      3.92043630E-03  8.66781166E-03 -1.48563447E-07 -1.28128881E-01 -2.83318659E-01
+     -9.50515302E-06 -1.22164297E-02 -5.70403375E-03 -9.75241191E-07  1.36424875E-01
+      2.80354881E-01 -5.12580499E-07 -8.39102571E-07  1.97991907E-02 -5.20354252E-06
+     -8.94183992E-06 -5.94675720E-02 -4.55117569E-07 -8.48014663E-07  1.98467605E-02
+      6.17124058E-06  1.06289571E-05  1.98216208E-02
+    Gaussian Version                           C   N=           2
+    ES64L-G16RevA.03        
+    </pre>
+    </details>
+
+.. raw:: html
+
+    <details>
+    <summary>Example <b>opt_freq_s1.fchk</b>, harmonic S1 potential of methylium:</summary>
+    <pre>
+    optimize on S1 potential, frequencies, S0/S1 NAC vector                 
+    Freq      RwB97XD TD-FC                                               def2SVP             
+    Number of atoms                            I                4
+    Atomic numbers                             I   N=           4
+	       1           6           1           1
+    Current cartesian coordinates              R   N=          12
+      7.22778314E-01  4.15611802E+00 -3.21792826E-02 -1.27934073E+00  4.15849904E+00
+      5.25786668E-01 -2.99598583E+00  5.49400875E+00 -5.88472233E-02 -2.99588189E+00
+      2.82096408E+00 -5.68149376E-02
+    Real atomic weights                        R   N=           4
+      1.00782504E+00  1.20000000E+01  1.00782504E+00  1.00782504E+00
+    Total Energy                               R     -3.925836216784926E+01
+    Cartesian Gradient                         R   N=          12
+     -3.43691605E-05 -3.20700523E-05 -2.80997555E-05 -1.88930942E-05  5.05119020E-05
+      7.83269774E-06  1.47113919E-05 -5.98730725E-05  2.04582756E-05  3.85508629E-05
+      4.14312228E-05 -1.91217821E-07
+    Cartesian Force Constants                  R   N=          78
+      3.39884947E-01 -3.61764181E-04  1.93783224E-02 -8.74056705E-02  8.68860085E-05
+      3.48168470E-02 -3.42850585E-01  3.55000406E-04  1.03096412E-01  6.75939164E-01
+      3.63253137E-04 -5.55944879E-03 -9.49841351E-05 -3.37830920E-04  8.58489739E-02
+      7.80896289E-02 -1.04048086E-04 -4.07886771E-02  1.18874915E-03  2.95085211E-05
+      8.86823153E-02  1.50791922E-03  2.36160154E-02 -7.86646682E-03 -1.66676520E-01
+      4.66733904E-02 -3.97129280E-02  1.45219551E-01 -2.68895345E-03 -6.88588851E-03
+     -3.57156844E-03  8.43077698E-02 -4.02250454E-02  3.47377446E-02 -7.60115523E-02
+      8.40917333E-02  4.66580855E-03 -1.68616973E-03  2.98968710E-03 -5.22208363E-02
+      1.80225651E-02 -2.39935585E-02  3.37589811E-02 -2.38132057E-02  1.52223647E-02
+      1.45771850E-03 -2.36092516E-02 -7.82427432E-03 -1.66412060E-01 -4.66988127E-02
+     -3.95654501E-02  1.99490493E-02 -5.60726413E-03  1.37960467E-02  1.45005292E-01
+      2.68746449E-03 -6.93298512E-03  3.57966657E-03 -8.43249393E-02 -4.00644797E-02
+     -3.46632050E-02  5.72214640E-03 -3.69807994E-02  7.47681033E-03  7.59153284E-02
+      8.39782642E-02  4.65023305E-03  1.70333181E-03  2.98214303E-03 -5.20643245E-02
+     -1.79570895E-02 -2.39000797E-02  1.38204137E-02 -7.35297046E-03  5.78150669E-03
+      3.35936777E-02  2.36067281E-02  1.51364300E-02
+    Nonadiabatic coupling                      R   N=          12
+      7.69794074E-05  1.35949721E-01 -2.47294349E-04 -4.57705419E-04 -1.68634768E-02
+     -5.29196540E-04  1.73570747E-01 -5.58179958E-02 -5.22702665E-01 -1.73191088E-01
+     -5.55348660E-02  5.23407463E-01
+    Gaussian Version                           C   N=           2
+    ES64L-G16RevA.03        
+    </pre>
+    </details>
+
+
 =====================
 with 'gdml' potential
 =====================
@@ -445,7 +537,8 @@ with 'gdml' potential
     }
   ]}
 
-
+`pot_s0.npz` is an sGDML model file trained to reproduce the ground state potential.
+  
 -------------------------------------
 Dissociation limit of GDML potentials
 -------------------------------------
