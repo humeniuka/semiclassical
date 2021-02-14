@@ -305,7 +305,7 @@ en0 = hbar/2.0 * omega
 
 for t in range(0, nt):
     ic_wavefunctions_qm[:,t] = psi
-    ic_correlation_qm[t] = 2*np.pi/hbar * np.exp(1j*times[t]*en0) * np.sum(psi0.conjugate() * psi * dx)
+    ic_correlation_qm[t] = 1/hbar**2 * np.exp(1j*times[t]*en0) * np.sum(psi0.conjugate() * psi * dx)
     for i in range(0, m):
         # split operator step
         # |psi(t+dt)> = U(dt) |psi(t)> 
