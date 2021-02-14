@@ -456,7 +456,7 @@ def run_semiclassical_dynamics(task, device='cpu'):
         #  <phi(0)|phi(0)> = | dqi dpi   <q0,p0|qi,pi><qi,pi|q0,p0>   = | P(qi,pi) dqi dpi = 1/n sum P(x)/P(x) = 1
         #                    /                                          /                        x~P
         logger.info(f"<phi(0)|phi(0)>= {autocorrelation[0]}")
-        assert abs(autocorrelation[0] - 1.0) < 1.0e-5
+        assert abs(autocorrelation[0] - 1.0) < 1.0e-3
 
         # update data in npz-file
         data['trajectories'] = ntraj_tot
