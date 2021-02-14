@@ -537,7 +537,7 @@ with 'gdml' potential
     }
   ]}
 
-`pot_s0.npz` is an sGDML model file trained to reproduce the ground state potential.
+`pot_s0.npz` is an sGDML model trained to reproduce the ground state potential.
   
 -------------------------------------
 Dissociation limit of GDML potentials
