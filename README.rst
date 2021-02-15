@@ -324,8 +324,8 @@ with 'anharmonic AS' potential
 	"propagator" : "HK",
 	"batch_size"            : 10000,
 	"num_trajectories"      : 50000,
-	"num_steps"             : 10000,
-	"time_step_fs"          : 0.001,
+	"num_steps"             : 2000,
+	"time_step_fs"          : 0.005,
 	"results" : {
 	    "correlations"      : "correlations.npz",
 	    "overwrite"         : false
@@ -393,11 +393,11 @@ with 'harmonic' potential
 	    "excited"   : "opt_freq_s1.fchk",
 	    "coupling"  : "opt_freq_s1.fchk"
 	},
-	"propagator" : "HK",
-	"batch_size"            : 1000,
-	"num_trajectories"      : 2000,
-	"num_steps"             : 10,
-	"time_step_fs"          : 0.001,
+	"propagator" : "WM",
+	"batch_size"            : 10000,
+	"num_trajectories"      : 50000,
+	"num_steps"             : 2000,
+	"time_step_fs"          : 0.005,
 	"results" : {
 	    "correlations"      : "correlations.npz"
 	}
@@ -519,11 +519,11 @@ with 'gdml' potential
 	    "excited"   : "opt_freq_s1.fchk",
 	    "coupling"  : "opt_freq_s1.fchk"
 	},
-	"propagator" : "HK",
-	"batch_size"            : 1000,
-	"num_trajectories"      : 2000,
-	"num_steps"             : 10,
-	"time_step_fs"          : 0.001,
+	"propagator" : "WM",
+	"batch_size"            : 10000,
+	"num_trajectories"      : 50000,
+	"num_steps"             : 2000,
+	"time_step_fs"          : 0.005,
 	"results" : {
 	    "correlations"      : "correlations.npz"
 	}
