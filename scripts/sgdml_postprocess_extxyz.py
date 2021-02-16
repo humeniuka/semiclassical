@@ -336,7 +336,10 @@ if args.remove_rotation:
 
 if args.fix_dissociation:
     print(" * add fully dissociated molecules to dataset to fix dissociation limit")
-    molecules += fix_dissociation_limit(molecules, scale=args.scale, ngeo=args.ngeo)
+    molecules += fix_dissociation_limit(molecules,
+                                        dissoc_limit=args.dissoc_limit,
+                                        scale=args.scale,
+                                        ngeo=args.ngeo)
         
 # save processed molecules
 with open(args.output_xyz, "w") as f:
