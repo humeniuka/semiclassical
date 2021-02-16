@@ -538,7 +538,23 @@ with 'gdml' potential
   ]}
 
 `pot_s0.npz` is an sGDML model trained to reproduce the ground state potential.
-  
+To verify that the sGDML model fits the ground state potential accurately,
+the harmonic normal mode frequencies and displacement vectors can be compared
+visually with those stored in a Gaussian 16 formatted checkpoint file:
+
+.. code-block:: bash
+
+   $ sgdml_compare_normal_modes.py  opt_freq_s0.fchk  pot_s0.npz
+
+   
+If `scan.fchk` contains the results of a relaxed scan (using `Opt=ModRedundant` in Gaussian 16)
+the ab initio and sGDML energies can be compared with:
+   
+.. code-block:: bash
+
+   $ sgdml_compare_relaxed_scan.py  scan.fchk  pot_s0.npz
+
+		
 -------------------------------------
 Dissociation limit of GDML potentials
 -------------------------------------
