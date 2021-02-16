@@ -554,35 +554,6 @@ the ab initio and sGDML energies can be compared with:
 
    $ sgdml_compare_relaxed_scan.py  scan.fchk  pot_s0.npz
 
-		
--------------------------------------
-Dissociation limit of GDML potentials
--------------------------------------
-ML potentials can be very accurate for interpolating, but terribly wrong when extrapolating
-outside the range of the training data. In particular the dissociation limit will be completely wrong
-(even -infinity), unless the training data is augmented with structures where bonds are broken. 
-
-Suppose that `forces_0.xyz` contains geometries, energies and forces sampled from a ground state
-MD at constant temperature. Based on these samples a GDML potential is trained. To correct
-the dissociation limit the samples around the equilibrium geometry are augmented by a set of
-scaled geometries, where all coordinates are multiplied by a factor, so that all bonds are broken.
-The energy of these structures should be equal to the sum of the energies of the isolated atoms
-and the forces should be zero. Adding these structures to the data set ensures a qualitatively
-correct dissociation limit.
-
-augment a data set with scaled geometries:
-
-.. code-block::
-
-   $ sgdml_postprocess_extxyz.py  forces_0.xyz  forces_0-augmented.xyz  --fix_dissociation
-
-By default the dissociation energy is computed from the atomic wB97XD/def2SVP energies.
-The dissociation limit (in Hartree) may also be set explicitly:
-
-.. code-block::
-
-   $ sgdml_postprocess_extxyz.py  forces_0.xyz  forces_0-augmented.xyz  --fix_dissociation --dissoc_limit=-150.0
-
 
 ----------
 References
