@@ -114,7 +114,7 @@ For instance, one could repeatedly run batches of semiclassical trajectories, un
    
    $ semi dynamics input.json
 
-After checking visually that the autocorrelation function equals *C(t=0) = 1*,
+After checking visually that the autocorrelation function has converged,
 
 .. code-block::
    
