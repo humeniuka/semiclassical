@@ -77,9 +77,9 @@ parser.add_argument(
     '--ngeo',
     dest='ngeo',
     type=int,
-    default=1000,
+    default=100,
     metavar='N',
-    help='number of dissociated geometries that are added (default: N=1000)')
+    help='number of dissociated geometries that are added (default: N=100)')
 
 
 args = parser.parse_args()
