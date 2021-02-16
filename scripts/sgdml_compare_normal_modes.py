@@ -124,16 +124,20 @@ if __name__ == "__main__":
     with open(fchk_file) as f:
         fchk = FormattedCheckpointFile(f)        
 
-    pos, _, _, hessian_qm = fchk.harmonic_approximation()
+    pos, energy_qm, _, hessian_qm = fchk.harmonic_approximation()
     masses = fchk.masses()
 
     # sGDML frequencies
     model = np.load(model_file, allow_pickle=True)
     gdml = GDMLPredict(model)
 
-    _, _, hess = gdml.forward( torch.from_numpy(pos).unsqueeze(0) )
-    print(hess.shape)
+    energy, _, hess = gdml.forward( torch.from_numpy(pos).unsqueeze(0) )
+    energy_sgdml = energy[0].item()
     hessian_sgdml = hess[0,:,:]
+
+    # compare energies
+    print(f"ground state energy (Hartree) :  {energy_qm:12.7f} (QM)   vs.  {energy_sgdml:12.7f} (sGDML)")
+    assert abs(energy_qm - energy_sgdml) < 0.05, "QM and predicted sGDML differ by more than 0.05 Hartree"
     
     freqs_qm, modes_qm = vibrational_analysis(hessian_qm, masses)
     freqs_sgdml, modes_sgdml = vibrational_analysis(hessian_sgdml, masses)
