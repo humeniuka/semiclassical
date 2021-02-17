@@ -347,6 +347,7 @@ def run_semiclassical_dynamics(task, device='cpu'):
                  autocorrelation=autocorrelation,
                  ic_correlation=ic_correlation,
                  adiabatic_gap=adiabatic_gap,
+                 zero_point_energy=en_zpt,
                  trajectories=0)
     else:
         assert task.get('manual_seed', None) is None, \
