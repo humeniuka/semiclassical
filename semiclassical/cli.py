@@ -640,7 +640,7 @@ def _plot_correlation_functions(filenames):
                
     ax1 = plt.subplot(1,3,1)
     ax1.set_xlabel("Time / fs")
-    ax1.set_ylabel("Autocorrelation $e^{\frac{\imath}{\hbar} E_0^{(es)} t} \langle \phi(0) | \phi(t) \rangle$ ")
+    ax1.set_ylabel('Autocorrelation $e^{\frac{\imath}{\hbar} E_0^{(es)} t} \langle \phi(0) | \phi(t) \rangle$ ')
 
     ax2 = plt.subplot(1,3,2)
     ax2.set_xlabel("Time / fs")
