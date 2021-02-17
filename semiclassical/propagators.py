@@ -806,12 +806,18 @@ class HermanKlukPropagator(object):
         cauto_qp = vt.conj() * vi * c * torch.exp(1j/hbar*action)
         return cauto_qp
         
-    def autocorrelation(self):
+    def autocorrelation(self, energy0_es=0.0):
         """
         autocorrelation function for current time step
-        
-          C    (t) = <phi(0)|phi(t)>
+
+                      i/hbar t E_0^(es) 
+          C    (t) = e                  <phi(0)|phi(t)>
            auto
+
+        Parameters
+        ----------
+        energy0_es :  float
+          zero-point energy of vibrational ground on initial surface
            
         Returns
         -------
@@ -829,7 +835,11 @@ class HermanKlukPropagator(object):
         #  auto     /(2 pi hbar)^d  auto                             i  auto
         #
         cauto = torch.sum(cauto_qp/(self.ntraj * self.probi * (2*np.pi*hbar)**self.dim))
-    
+
+        # dynamical phase from motion on the excited state
+        #  e^{i/hbar H^(es) t} |phi(0)> = e^{i/hbar E_0^(es) t} |phi(0)>
+        cauto = cauto * torch.exp(1j/hbar * self.t * torch.tensor(energy0_es))
+        
         return cauto.item()
     
     def ic_correlation(self, potential, energy0_es=0.0):
@@ -1603,12 +1613,18 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
 
         return cauto_qp
     
-    def autocorrelation(self):
+    def autocorrelation(self, energy0_es=0.0):
         """
         autocorrelation function for current time step
-        
-          C    (t) = <phi(0)|phi(t)>
+
+                      i/hbar t E_0^(es) 
+          C    (t) = e                  <phi(0)|phi(t)>
            auto
+
+        Parameters
+        ----------
+        energy0_es :  float
+          zero-point energy of vibrational ground on initial surface
            
         Returns
         -------
@@ -1626,6 +1642,10 @@ class WaltonManolopoulosPropagator(HermanKlukPropagator):
         #  auto     /(2 pi hbar)^d  auto                             i  auto
         #
         cauto = torch.sum(cauto_qp/(self.ntraj * self.probi * (2*np.pi*hbar)**self.dim))
+
+        # dynamical phase from motion on the excited state
+        #  e^{i/hbar H^(es) t} |phi(0)> = e^{i/hbar E_0^(es) t} |phi(0)>
+        cauto = cauto * torch.exp(1j/hbar * self.t * torch.tensor(energy0_es))
         
         return cauto.item()
     

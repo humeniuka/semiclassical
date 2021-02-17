@@ -397,7 +397,7 @@ def run_semiclassical_dynamics(task, device='cpu'):
         # run semiclassical dynamics
         with tqdm.tqdm(total=nt) as progress_bar:
             for t in range(0, nt):
-                autocorrelation_[t] += propagator.autocorrelation()
+                autocorrelation_[t] += propagator.autocorrelation(energy0_es=en_zpt)
                 ic_correlation_[t] += propagator.ic_correlation(potential, energy0_es=en_zpt)
 
                 # checks
@@ -593,15 +593,11 @@ def _export_tables(filename):
         f.write(f"# propagator: {propagator}   trajectories: {trajectories}\n")
         f.write(f"# zero-point energy: {data['zero_point_energy']*units.hartree_to_wavenumbers:.2f} cm-1\n")
         f.write('#\n')
-        f.write(f"# The dynamical phase due to the zero-point energy is removed: C(t) = exp(i/h E0 t) <phi(0)|phi(t)>\n")
-        f.write('#\n')
         f.write('# Time/fs                  Re[C(t)]                  Im[C(t)]\n')
-        # Factoring out the dynamical phase gives a smoother curve that can be more easily analyzed.
-        autocorrelation = data['autocorrelation'] * np.exp(1j/hbar * data['zero_point_energy'] * data['times'])
         np.savetxt(f, np.vstack(
             (data['times'] * units.autime_to_fs,
-             autocorrelation.real,
-             autocorrelation.imag)
+             data['autocorrelation'].real,
+             data['autocorrelation'].imag)
         ).T)
     with open("ic_correlation.dat", "w") as f:
         f.write('# IC-correlation function\n')
@@ -644,7 +640,7 @@ def _plot_correlation_functions(filenames):
                
     ax1 = plt.subplot(1,3,1)
     ax1.set_xlabel("Time / fs")
-    ax1.set_ylabel("Autocorrelation")
+    ax1.set_ylabel("Autocorrelation $e^{\frac{\imath}{\hbar} E_0^{(es)} t} \langle \phi(0) | \phi(t) \rangle$ ")
 
     ax2 = plt.subplot(1,3,2)
     ax2.set_xlabel("Time / fs")
