@@ -613,6 +613,7 @@ def _export_tables(filename):
             f.write('# internal conversion rate\n')
             f.write(f"# propagator: {propagator}   trajectories: {trajectories}\n")
             f.write(f"# broadening: {data['broadening']}   HWHM_G: {data['hwhmG']} eV   HWHM_L: {data['hwhmL']} eV\n")
+            f.write(f"# tmin: {data['times'].min()*units.autime_to_fs:.4f} fs  tmax: {data['times'].max()*units.autime_to_fs:.4f} fs  steps= {len(data['times'])}\n")
             f.write('#\n')
             f.write('# Energy/eV                kIC(E)/s^-1\n')
             np.savetxt(f, np.vstack(

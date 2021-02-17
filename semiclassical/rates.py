@@ -61,16 +61,30 @@ def rate_from_correlation(times, correlation, lineshape):
     # k(0 <= t)
     correlation_[int((2*nt-1)/2):] = correlation
     # k(t < 0) = k(0 < t)^*
-    correlation_[:int((2*nt-1)/2)] = correlation[1:].conj()
-
+    # complex conjugate of correlation function and order of time steps is reversed
+    correlation_[:int((2*nt-1)/2)] = (correlation[1:].conj())[::-1]
+    
     # Fourier transform of broadening function is the lineshape
     lineshape_t = lineshape(times_)
 
+    # Switching function (Gibbs) damps the correlation function so that
+    # it decays to 0 at t=tmax.
+    # WARNING: If the propagation time is too short, the rates will be
+    # determined by the damping function and not by the correlation function.
+    damp = np.cos(0.5*np.pi * times_/t_max)**2
+    
     # discrete Fourier transform
-    rate = 2*t_max * fft.ifft( fft.ifftshift(lineshape_t * correlation_) )
+    rate = 2*t_max * fft.ifft( fft.ifftshift(damp * lineshape_t * correlation_) )
     
     # convert rate from atomic units to seconds^-1
     rate *= 1.0e15 / units.autime_to_fs
+
+    # TODO:
+    # For some reason, the rate has to be divided by a factor of 2 to
+    # get agreement with FCclasses3. Together with the factor of 4*pi
+    # in the IC correlation function, this amounts to an overall factor of 2*pi.
+    # This needs to be understood and fixed.
+    rate /= 2.0
     
     return energies, rate
 
