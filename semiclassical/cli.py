@@ -700,7 +700,7 @@ def _show_information(filename):
     trajectories           : {data['trajectories']:10}
     time step (fs)         : {(data['times'][1]-data['times'][0])*units.autime_to_fs:10.4f}
     propagation time (fs)  : {max(data['times'])*units.autime_to_fs:10.4f}
-    zero-point energy (au) : {data['zero_point_energy']}
+    zero-point energy (eV) : {data['zero_point_energy']*units.hartree_to_ev:10.4f}
     """)
     if 'ic_rate' in data:
         if not np.isnan(data['adiabatic_gap']):
