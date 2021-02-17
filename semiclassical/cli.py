@@ -591,12 +591,18 @@ def _export_tables(filename):
     with open("autocorrelation.dat", "w") as f:
         f.write('# autocorrelation function\n')
         f.write(f"# propagator: {propagator}   trajectories: {trajectories}\n")
+        f.write(f"# zero-point energy: {data['zero_point_energy']:.4f} eV\n")
+        f.write('#\n')
+        f.write(f"# The dynamical phase due to the zero-point energy is removed: C(t) = e^{i/h E0 t} <phi(0)|phi(t)>\n")
         f.write('#\n')
         f.write('# Time/fs                  Re[C(t)]                  Im[C(t)]\n')
+        # Multiplying by the dynamical phase gives a smoother curve that can be directly compared
+        # with the autocorrelation produced by FCclasses3.
+        autocorrelation = data['autocorrelation'] * np.exp(1j/hbar * data['zero_point_energy'] * data['times'])
         np.savetxt(f, np.vstack(
             (data['times'] * units.autime_to_fs,
-             data['autocorrelation'].real,
-             data['autocorrelation'].imag)
+             autocorrelation.real,
+             autocorrelation.imag)
         ).T)
     with open("ic_correlation.dat", "w") as f:
         f.write('# IC-correlation function\n')
