@@ -679,11 +679,23 @@ def _plot_correlation_functions(filenames):
                  ls=linestyle,
                  color=lim.get_color(),
                  label=f"Im[{filename}]")
-
+        
         # rates (functions of energy)
         if 'ic_rate' in data:
-            ax3.plot(data['energies'] * units.hartree_to_ev, data['ic_rate'], ls=linestyle)
-        
+            lic, = ax3.plot(data['energies'] * units.hartree_to_ev, data['ic_rate'], ls=linestyle)
+
+            if not np.isnan(data['adiabatic_gap']):
+                # read off IC rate at point closest to adiabatic excitation energy
+                iclosest = np.argmin(abs(data['energies'] - data['adiabatic_gap']))
+                kic = data['ic_rate'][iclosest]
+
+                # highlight the IC rate at the adiabatic excitation energy by crossing
+                # vertical and horizontal lines
+                ax3.axvline(x=data['adiabatic_gap'] * units.hartree_to_ev, ymax=kic,
+                            color=lic.get_color(), ls=linestyle, lw=0.5)
+                ax3.axhline(y=kic, xmax=data['adiabatic_gap'] * units.hartree_to_ev,
+                            color=lic.get_color(), ls=linestyle, lw=0.5)
+            
     plt.suptitle(f"trajectories: {trajectories}, propagators: {propagators}")
     ax2.legend(bbox_to_anchor=(1.05, 1.0))
 
