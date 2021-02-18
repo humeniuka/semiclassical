@@ -194,7 +194,7 @@ taus = np.array([0.4, 0.8, 1.2, 1.6, 2.0,2.4])
 
 fix,axes = plt.subplots(int(np.ceil(len(taus)/3)),3, figsize=(10,5))
 for ij,tau in enumerate(taus):
-    time = tau/omega * 2.0*np.pi
+    time = tau * (2.0*np.pi)/omega
     t = int(time/dt)
     jax = ij % 3
     iax = ij // 3
@@ -234,7 +234,7 @@ fig.set_size_inches(10.0, 5.0)
 plt.xlabel(r"Time $t/T$")
 plt.ylabel(r"$C_{auto}(t) = \langle \phi(0) \vert \phi(t) \rangle$")
 
-taus = times * (2*np.pi)/omega
+taus = times * omega/(2*np.pi)
 plt.plot(taus, autocorrelation_qm.real, label="Re[$C(t)$] QM")
 plt.plot(taus, autocorrelation_qm.imag, label="Im[$C(t)$] QM")
 
@@ -244,7 +244,6 @@ plt.plot(taus, autocorrelation_hk.imag, label="Im[$C(t)$] HK", ls="-.")
 plt.plot(taus, autocorrelation_wm.real, label="Re[$C(t)$] WM", ls="--")
 plt.plot(taus, autocorrelation_wm.imag, label="Im[$C(t)$] WM", ls="--")
 
-plt.xlim((0,100))
 plt.legend(ncol=3)
 plt.tight_layout()
 plt.show()
@@ -258,13 +257,12 @@ plt.show()
 plt.xlabel(r"Time $t/T$")
 plt.ylabel(r"$\vert C^{semi}_{auto}(t) - C^{QM}_{auto}(t) \vert$")
 
-taus = times * (2*np.pi)/omega
+taus = times * omega/(2*np.pi)
 error_hk = abs(autocorrelation_hk - autocorrelation_qm)
 error_wm = abs(autocorrelation_wm - autocorrelation_qm)
 plt.plot(taus, error_hk, label="error |HK-QM|")
 plt.plot(taus, error_wm, label="error |WM-QM|")
 
-plt.xlim((0,400))
 plt.legend()
 plt.tight_layout()
 plt.show()
@@ -334,7 +332,7 @@ fig.set_size_inches(10.0, 5.0)
 plt.xlabel(r"Time $t/T$")
 plt.ylabel(r"$\tilde{k}_{ic}(t)$")
 
-taus = times * (2*np.pi)/omega
+taus = times * omega/(2.0*np.pi)
 plt.plot(taus, ic_correlation_qm.real, label=r"Re[$\tilde{k}_{ic}(t)$] QM")
 plt.plot(taus, ic_correlation_qm.imag, label=r"Im[$\tilde{k}_{ic}(t)$] QM")
 
@@ -344,7 +342,6 @@ plt.plot(taus, ic_correlation_hk.imag, label=r"Im[$\tilde{k}_{ic}(t)$] HK", ls="
 plt.plot(taus, ic_correlation_wm.real, label=r"Re[$\tilde{k}_{ic}(t)$] WM", ls="--")
 plt.plot(taus, ic_correlation_wm.imag, label=r"Im[$\tilde{k}_{ic}(t)$] WM", ls="--")
 
-plt.xlim((300,400))
 plt.legend(ncol=3)
 plt.tight_layout()
 plt.show()
@@ -358,13 +355,12 @@ plt.show()
 plt.xlabel(r"Time $t/T$")
 plt.ylabel(r"$\vert \tilde{k}^{semi}_{ic}(t) - \tilde{k}^{QM}_{ic}(t) \vert$")
 
-taus = times * (2*np.pi)/omega
+taus = times * omega/(2*np.pi)
 error_hk = abs(ic_correlation_hk - ic_correlation_qm)
 error_wm = abs(ic_correlation_wm - ic_correlation_qm)
 plt.plot(taus, error_hk, label="error |HK-QM|")
 plt.plot(taus, error_wm, label="error |WM-QM|")
 
-plt.xlim((0,400))
 plt.legend()
 plt.tight_layout()
 plt.show()

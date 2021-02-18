@@ -725,8 +725,8 @@ def _show_information(filename):
         else:
             kic = np.nan
         print(f"""
-    adiabatic gap Ead (eV) : {data['adiabatic_gap']*units.hartree_to_ev:6.3f}
-    IC rate kic(Ead) (s-1) : {kic:6.3e}
+    adiabatic gap Ead (eV)   : {data['adiabatic_gap']*units.hartree_to_ev:6.3f}
+    IC rate kic(Ead) (s-1)   : {kic:6.3e}
         """)
     else:
         print("  No rates found in file, you have to compute them first with the command 'semi rates'.")

@@ -326,10 +326,8 @@ with 'anharmonic AS' potential
 	"num_steps"             : 2000,
 	"time_step_fs"          : 0.005,
 	"results" : {
-	    "correlations"      : "correlations.npz",
-	    "overwrite"         : false
-	},
-	"manual_seed"           : 0
+	    "correlations"      : "correlations.npz"
+	}
     },
     {
         "task"  : "rates",
