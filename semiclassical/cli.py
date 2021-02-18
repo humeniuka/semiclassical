@@ -134,6 +134,8 @@ def main():
                     run_semiclassical_dynamics(task, device=device)
 
         elif args.command == 'rates':
+
+            assert args.json_input.endswith('.json'), f"The argument for the command 'rates' should be the JSON control file, got '{args.json_input}' instead."
             
             with open(args.json_input) as f:
                 config = json.load(f)
