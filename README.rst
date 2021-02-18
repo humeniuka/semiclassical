@@ -141,7 +141,7 @@ See also the examples for input files at the end.
 Keywords for "dynamics" task
 ============================
     
-.. topic:: ``potential``
+``potential``
 
    | **Description:** Block defining the potential.
    | **Datatype:** JSON
@@ -205,44 +205,38 @@ Keywords for "dynamics" task
    |                 this file.
    |             **Datatype:** string (path to fchk-file)
 
-
-.. topic:: ``propagator``
+``propagator``
 
    | **Description:** Name of the semiclassical propagator
    | **Datatype:** string
    |    - 'HK' :  Herman & Kluk propagator (see [HK]_)
    |    - 'WM' :  Walton & Manolopoulos propagator (see [WM]_)
    | **Default:** ``HK``
-
    
-.. topic:: ``num_steps``
+``num_steps``
 
    | **Description:** Number of time steps for dynamics.
    | **Datatype:** integer
-
    
-.. topic:: ``time_step_fs``
+``time_step_fs``
 
    | **Description:** Duration of a single time step in fs.
    | **Datatype:** float
-
    
-.. topic:: ``num_trajectories``
+``num_trajectories``
 
    | **Description:** Total number of trajectories. ``batch_size`` trajectories are run in parallel.
    | **Datatype:** integer
    | **Default:** 50000
-
    
-.. topic:: ``batch_size``
+``batch_size``
 
    | **Description:** ``batch_size`` trajectories are run in parallel.
    |     If memory is limited, the batch size should be reduced. 
    | **Datatype:** integer
    | **Default:** 10000
-
    
-.. topic:: ``results``
+``results``
 
    | **Description:** Controls how results of the dynamics calculation are stored on file.
    | **Datatype:** JSON
@@ -263,7 +257,7 @@ Keywords for "dynamics" task
    |             **Datatype:** boolean
    |             **Default:** true
 
-.. topic:: ``manual_seed``
+``manual_seed``
 
    | **Description:** Initial values for positions and momenta are drawn randomly.
    |     To make the random numbers reproducible between runs,
@@ -277,31 +271,31 @@ Keywords for "dynamics" task
 Keywords for "rates" task
 =========================
 
-.. topic:: ``correlations``
+``correlations``
 
    | **Description:** Converged correlation functions are read from this npz-file.
    | **Datatype:** string
    | **Default:** 'correlations.npz'
 
-.. topic:: ``rates``
+``rates``
 
    | **Description:** Transition rates are written to this npz-file.
    | **Datatype:** string
    | **Default:** 'correlations.npz'
 
-.. topic:: ``broadening``
+``broadening``
 
    | **Description:** Lineshape function (*'gaussian'*, *'lorentzian'* or *'voigtian'*)
    | **Datatype:** string
    | **Default:** 'gaussian'
 
-.. topic:: ``hwhmG_ev``
+``hwhmG_ev``
 
    | **Description:** Gaussian width of lineshape function in energy domain (in eV)
    | **Datatype:** float
    | **Default:** 0.01
 
-.. topic:: ``hwhmL_ev``
+``hwhmL_ev``
 
    | **Description:** Lorentzian width of lineshape function in energy domain (in eV)
    | **Datatype:** float
