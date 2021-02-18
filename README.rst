@@ -214,22 +214,26 @@ Keywords for "dynamics" task
    |    - 'WM' :  Walton & Manolopoulos propagator (see [WM]_)
    | **Default:** ``HK``
 
+   
 .. topic:: ``num_steps``
 
    | **Description:** Number of time steps for dynamics.
    | **Datatype:** integer
 
+   
 .. topic:: ``time_step_fs``
 
    | **Description:** Duration of a single time step in fs.
    | **Datatype:** float
-  
+
+   
 .. topic:: ``num_trajectories``
 
    | **Description:** Total number of trajectories. ``batch_size`` trajectories are run in parallel.
    | **Datatype:** integer
    | **Default:** 50000
-  
+
+   
 .. topic:: ``batch_size``
 
    | **Description:** ``batch_size`` trajectories are run in parallel.
@@ -237,6 +241,7 @@ Keywords for "dynamics" task
    | **Datatype:** integer
    | **Default:** 10000
 
+   
 .. topic:: ``results``
 
    | **Description:** Controls how results of the dynamics calculation are stored on file.
