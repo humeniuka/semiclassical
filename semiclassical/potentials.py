@@ -238,12 +238,19 @@ class MorsePotential(object):
           non-adiabatic coupling vector
         """
         self.omega = omega
-        self.chi = chi
         self.nac = nac
         
-        if (self.chi == 0.0).all():
+        if (chi == 0.0).all():
             logger.info("Potential is harmonic.")
-        
+        else:
+            # To avoid dividing by zero, the harmonic modes (chi=0)
+            # get a tiny anharmonicity. Then both harmonic and anharmonic
+            # modes can be described by a Morse potential. This shouldn't
+            # change the results.
+            chi[chi == 0.0] += 1.0e-4
+            
+        self.chi = chi
+            
         self.a = torch.sqrt(2*omega*chi)
         self.D = 0.25 * omega/chi
 

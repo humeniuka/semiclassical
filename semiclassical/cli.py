@@ -408,8 +408,9 @@ def run_semiclassical_dynamics(task, device='cpu'):
                     assert not np.isnan(autocorrelation_).any(), f"encountered NaN's in autocorrelation : {autocorrelation_}"
                     assert not np.isnan(ic_correlation_).any(), f"encountered NaN's in IC correlation : {ic_autocorrelation_}"
                 except AssertionError as error:
-                    # save current trajectories (positions and momenta) as this information is helpful for debugging
-                    logger.info("NaN's detected, saving trajectories to 'current_trajectories.xyz' for debugging ...")
+                    if not atoms is None:
+                        # save current trajectories (positions and momenta) as this information is helpful for debugging
+                        logger.info("NaN's detected, saving trajectories to 'current_trajectories.xyz' for debugging ...")
                     _export_trajectories_extxyz('current_trajectories.xyz', atoms, propagator,
                                                 append=False)
                     raise error
