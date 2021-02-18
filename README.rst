@@ -335,7 +335,7 @@ with 'anharmonic AS' potential
     {
         "task"  : "rates",
 	"broadening"   : "gaussian",
-	"hwhm_ev"      : 0.001,
+	"hwhmG_ev"      : 0.001,
 	"correlations" : "correlations.npz",
 	"rates"        : "correlations.npz"
     }
@@ -405,7 +405,7 @@ with 'harmonic' potential
     {
         "task"  : "rates",
 	"broadening"   : "gaussian",
-	"hwhm_ev"      : 0.001,
+	"hwhmG_ev"      : 0.001,
 	"correlations" : "correlations.npz",
 	"rates"        : "correlations.npz"
     }
@@ -531,7 +531,7 @@ with 'gdml' potential
     {
         "task"  : "rates",
 	"broadening"   : "gaussian",
-	"hwhm_ev"      : 0.001,
+	"hwhmG_ev"      : 0.001,
 	"correlations" : "correlations.npz",
 	"rates"        : "correlations.npz"
     }
