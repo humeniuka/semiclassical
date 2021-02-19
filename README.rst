@@ -408,8 +408,14 @@ with 'harmonic' potential
     }
   ]}
 
-`opt_freq_s0.fchk` and `opt_freq_s1.fchk` are formatted checkpoint files from optimizations on S0 and S1, respectively, followed frequency and NAC (only for S1) calculations. You can use the script `trim_formatted_checkpoint_file.awk` to extracty the required fields from a formatted checkpoint file.
-  
+`opt_freq_s0.fchk` and `opt_freq_s1.fchk` are formatted checkpoint files from optimizations on S0 and S1, respectively, followed frequency and NAC (only for S1) calculations. To only extract the required fields from a formatted checkpoint file and thus reduce its size, you can use:
+
+.. code-block:: bash
+
+   $ trim_formatted_checkpoint_file.awk   large.fchk  >  small.fchk
+
+   
+   
 .. raw:: html
 
     <details>
