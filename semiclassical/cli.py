@@ -558,10 +558,10 @@ def calculate_rates(task):
     energies, ic_rate = rates.rate_from_correlation(data['times'], data['ic_correlation'], lineshape)
 
     # TODO: 
-    # For some reason, we have to multiply the rate by a factor of 4*pi
+    # For some reason, we have to multiply the rate by a factor of 2*pi
     # to get agreement with FCclasses3.
     # Well, anyway this must be the correct expression, but it would be nice to know why.
-    ic_rate *= 4.0*np.pi
+    ic_rate *= 2.0*np.pi
     
     data['energies'] = energies[energies >= 0.0]
     data['ic_rate'] = ic_rate[energies >= 0.0].real

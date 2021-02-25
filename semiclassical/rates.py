@@ -78,13 +78,6 @@ def rate_from_correlation(times, correlation, lineshape):
     
     # convert rate from atomic units to seconds^-1
     rate *= 1.0e15 / units.autime_to_fs
-
-    # TODO:
-    # For some reason, the rate has to be divided by a factor of 2 to
-    # get agreement with FCclasses3. Together with the factor of 4*pi
-    # in the IC correlation function, this amounts to an overall factor of 2*pi.
-    # This needs to be understood and fixed.
-    rate /= 2.0
     
     return energies, rate
 
