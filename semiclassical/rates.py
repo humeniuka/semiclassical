@@ -75,9 +75,12 @@ def rate_from_correlation(times, correlation, lineshape):
     
     # discrete Fourier transform
     rate = 2*t_max * fft.ifft( fft.ifftshift(damp * lineshape_t * correlation_) )
+
+    # TODO: What about the phase factor needed to get from DFT to FT ?
+    # http://stackoverflow.com/questions/24077913/discretized-continuous-fourier-transform-with-numpy
     
     # convert rate from atomic units to seconds^-1
     rate *= 1.0e15 / units.autime_to_fs
     
-    return energies, rate
+    return fft.fftshift(energies), fft.fftshift(rate)
 
