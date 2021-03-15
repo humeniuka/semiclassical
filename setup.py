@@ -31,7 +31,7 @@ setup(
     version=get_property('__version__', 'semiclassical'),
     description='Internal conversion rates from semiclassical molecular dynamics.',
     long_description=long_description,
-    long_description_content_type='text/markdown',
+    long_description_content_type='text/x-rst',
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Console',

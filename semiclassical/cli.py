@@ -724,11 +724,20 @@ def _show_information(filename):
             iclosest = np.argmin(abs(data['energies'] - data['adiabatic_gap']))
             kic = data['ic_rate'][iclosest]
         else:
-            kic = np.nan
+            kic = np.nan        
         print(f"""
     adiabatic gap Ead (eV)   : {data['adiabatic_gap']*units.hartree_to_ev:6.3f}
     IC rate kic(Ead) (s-1)   : {kic:6.3e}
         """)
+        # maximum of k_ic(E)
+        imax = np.argmax(data['ic_rate'])
+        en_max = data['energies'][imax]
+        kic_max = data['ic_rate'][imax]
+        print(f"""
+    position of maximum (eV) : {en_max*units.hartree_to_ev:6.3f}
+    maximum of IC rate (s-1) : {kic_max:6.3e}
+        """)
+        print("IC rates are only reliable around the maximum of the curve.")
     else:
         print("  No rates found in file, you have to compute them first with the command 'semi rates'.")
 
