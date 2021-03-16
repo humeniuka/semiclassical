@@ -108,7 +108,7 @@ mass = 1.0
 eps = 0.975
 b = (12.0)**(-0.5)
 # potential, see eqn. (7) in HK paper
-v = eps/(2*b**2) * (1.0 - np.exp(-b*x_))**2 + (1.0-eps)*0.5*omega*x_**2
+v = eps/(2*b**2) * (1.0 - np.exp(-b*x_))**2 + (1.0-eps)*0.5*omega**2*x_**2
 
 # I believe in the paper time is measured in units of oscillations, tau=t/T
 tau_max = 12.0
